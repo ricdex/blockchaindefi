@@ -275,6 +275,173 @@ Implementa un sistema de tokens regulados compuesto por dos contratos:
 
 ---
 
+## Como ejecutar
+
+### Paso 0: Inicializar el proyecto Foundry
+
+Si el proyecto no tiene `foundry.toml` ni `lib/` (estado limpio):
+
+```bash
+cd developer/10-real-world-assets
+
+cp README.md README.md.bak
+forge init --no-git --force
+mv README.md.bak README.md
+rm -rf src/ script/
+rm -f test/Counter.t.sol
+
+git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+rm -rf lib/forge-std/.git
+```
+
+Edita `foundry.toml`:
+
+```toml
+[profile.default]
+src = "contracts"
+out = "out"
+libs = ["lib"]
+```
+
+### Paso 1: Compilar y testear
+
+```bash
+forge build
+forge test -vv
+```
+
+### Paso 2: Deploy en Anvil
+
+**Terminal 1: Levantar Anvil**
+
+```bash
+anvil
+```
+
+**Terminal 2: Configurar variables y desplegar**
+
+```bash
+export PK=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+export ADMIN=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+export RPC=http://localhost:8545
+```
+
+**1. Desplegar IdentityRegistry (sin constructor args):**
+
+```bash
+forge create contracts/IdentityRegistry.sol:IdentityRegistry \
+  --rpc-url $RPC \
+  --private-key $PK
+```
+
+Desglose del comando:
+
+```
+forge create contracts/IdentityRegistry.sol:IdentityRegistry
+│            │                               │
+│            │                               └─ Nombre del contrato (linea 80)
+│            └─ Ruta al archivo .sol
+└─ Comando de Foundry para desplegar
+
+  (sin --constructor-args porque el constructor no recibe parametros)
+
+Ejecuta el constructor (lineas 80-83 de IdentityRegistry.sol):
+1. Guarda admin = msg.sender (linea 81) <- quien desplega es admin
+2. Agrega al deployer como compliance officer (linea 82)
+```
+
+Output esperado:
+
+```
+Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266    <- ADMIN + COMPLIANCE_OFFICER
+Deployed to: 0x...                                        <- address del IdentityRegistry (USAR ESTA)
+Transaction hash: 0x...
+```
+
+```bash
+export IDENTITY_REGISTRY=0x...  # Deployed to del output
+```
+
+**2. Desplegar RWAToken:**
+
+```bash
+forge create contracts/RWAToken.sol:RWAToken \
+  --rpc-url $RPC \
+  --private-key $PK \
+  --constructor-args "Real Estate Fund I" "REF1" $IDENTITY_REGISTRY 10000000000000000000000
+```
+
+Desglose del comando:
+
+```
+  --constructor-args "Real Estate Fund I" "REF1" $IDENTITY_REGISTRY 10000000000000000000000
+                     │                    │      │                   │
+                     │                    │      │                   └─ _initialSupply = 10,000 tokens
+                     │                    │      │                      (en wei: 10000 * 10^18)
+                     │                    │      └─ _identityRegistry (linea 130: address)
+                     │                    │         Vincula al IdentityRegistry para validar transfers
+                     │                    └─ _symbol (linea 129: string memory _symbol)
+                     └─ _name (linea 128: string memory _name)
+
+Ejecuta el constructor (lineas 127-146 de RWAToken.sol):
+1. Valida que _identityRegistry != address(0) (linea 133)
+2. Guarda name y symbol (lineas 135-136)
+3. Vincula el IdentityRegistry (linea 137)
+4. Otorga ADMIN, COMPLIANCE_OFFICER y AGENT roles al deployer (lineas 140-142)
+```
+
+Output esperado:
+
+```
+Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266    <- tiene todos los roles
+Deployed to: 0x...                                        <- address del RWAToken (USAR ESTA)
+Transaction hash: 0x...
+```
+
+```bash
+export RWA_TOKEN=0x...  # Deployed to del output
+```
+
+### Paso 3: Flujo completo en Anvil
+
+```bash
+# Definir inversores
+export INVESTOR1=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+export INVESTOR2=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+
+# 1. Whitelist: agregar inversores al IdentityRegistry
+#    (country code 840 = USA)
+cast send $IDENTITY_REGISTRY "addInvestor(address,uint16)" \
+  $ADMIN 840 \
+  --private-key $PK --rpc-url $RPC
+
+cast send $IDENTITY_REGISTRY "addInvestor(address,uint16)" \
+  $INVESTOR1 840 \
+  --private-key $PK --rpc-url $RPC
+
+cast send $IDENTITY_REGISTRY "addInvestor(address,uint16)" \
+  $INVESTOR2 276 \
+  --private-key $PK --rpc-url $RPC
+
+# 2. Transferir tokens a inversor whitelisted
+cast send $RWA_TOKEN "transfer(address,uint256)" \
+  $INVESTOR1 1000000000000000000000 \
+  --private-key $PK --rpc-url $RPC
+
+# 3. Verificar balance
+cast call $RWA_TOKEN "balanceOf(address)(uint256)" $INVESTOR1 --rpc-url $RPC
+# 1000000000000000000000 (1000 tokens)
+
+# 4. Intentar transferir a address NO whitelisted -> REVERT
+export NON_WHITELISTED=0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199
+cast send $RWA_TOKEN "transfer(address,uint256)" \
+  $NON_WHITELISTED 100000000000000000000 \
+  --private-key $PK --rpc-url $RPC
+# REVERT: ReceiverNotWhitelisted
+```
+
+---
+
 ## Vulnerabilidades relevantes
 
 ### 1. Oracle Dependency para valoracion de activos

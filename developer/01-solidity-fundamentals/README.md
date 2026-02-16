@@ -252,16 +252,45 @@ Implementa una billetera multifirma (MultiSig) que requiere M de N confirmacione
 
 ## Como ejecutar
 
-### Paso 1: Compilar
+### Paso 0: Inicializar el proyecto Foundry
 
-Desde el directorio del modulo:
+Si el proyecto no tiene `foundry.toml` ni `lib/` (estado limpio), inicializa desde cero:
 
 ```bash
 cd developer/01-solidity-fundamentals
-forge build
+
+# Respaldar el README antes de forge init (lo sobreescribe)
+cp README.md README.md.bak
+
+# Inicializar Foundry
+forge init --no-git --force
+
+# Restaurar README y limpiar archivos template
+mv README.md.bak README.md
+rm -rf src/ script/
+rm -f test/Counter.t.sol
+
+# Instalar forge-std (dependencia de testing)
+git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+rm -rf lib/forge-std/.git
 ```
 
-> El proyecto ya esta configurado con `foundry.toml` (src = `contracts/`, test = `test/`, libs en `lib/`). No necesitas correr `forge init`.
+Luego edita `foundry.toml` para apuntar a `contracts/` en lugar de `src/`:
+
+```toml
+[profile.default]
+src = "contracts"
+out = "out"
+libs = ["lib"]
+```
+
+> Si el proyecto ya tiene `foundry.toml` y `lib/forge-std`, puedes saltarte este paso.
+
+### Paso 1: Compilar
+
+```bash
+forge build
+```
 
 ### Paso 2: Ejecutar tests
 
@@ -339,6 +368,37 @@ forge create contracts/MultiSigWallet.sol:MultiSigWallet \
   --rpc-url $RPC \
   --private-key $OWNER1_KEY \
   --constructor-args "[$OWNER1,$OWNER2,$OWNER3]" 2
+```
+
+Desglose del comando:
+
+```
+forge create contracts/MultiSigWallet.sol:MultiSigWallet
+│            │                            │
+│            │                            └─ Nombre del contrato (contract MultiSigWallet, linea 6)
+│            └─ Ruta al archivo .sol
+└─ Comando de Foundry para desplegar contratos
+
+  --rpc-url $RPC              Nodo destino (Anvil en localhost:8545)
+  --private-key $OWNER1_KEY   Cuenta que paga el gas del deploy
+
+  --constructor-args "[$OWNER1,$OWNER2,$OWNER3]" 2
+                     │                           │
+                     │                           └─ _required = 2 (linea 78: uint256 _required)
+                     └─ _owners = array de 3 addresses (linea 78: address[] memory _owners)
+```
+
+Esto ejecuta el constructor (lineas 78-94 de MultiSigWallet.sol):
+1. Valida que hay al menos 1 owner y que `_required` es valido (lineas 79-82)
+2. Registra cada owner en el mapping `isOwner` y el array `owners` (lineas 84-91)
+3. Guarda `required = 2` como quorum minimo (linea 93)
+
+Output esperado:
+
+```
+Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266    <- cuenta que desplego (OWNER1)
+Deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3   <- direccion del contrato (USAR ESTA)
+Transaction hash: 0xabc123...                              <- hash de la tx de deploy
 ```
 
 Del output, copiar la direccion de `Deployed to:` y exportarla:

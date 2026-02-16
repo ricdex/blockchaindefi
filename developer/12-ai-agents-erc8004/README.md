@@ -250,6 +250,178 @@ FLUJO COMPLETO:
 
 ---
 
+## Como ejecutar
+
+### Paso 0: Inicializar el proyecto Foundry
+
+Si el proyecto no tiene `foundry.toml` ni `lib/` (estado limpio):
+
+```bash
+cd developer/12-ai-agents-erc8004
+
+cp README.md README.md.bak
+forge init --no-git --force
+mv README.md.bak README.md
+rm -rf src/ script/
+rm -f test/Counter.t.sol
+
+git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+rm -rf lib/forge-std/.git
+```
+
+Edita `foundry.toml`:
+
+```toml
+[profile.default]
+src = "contracts"
+out = "out"
+libs = ["lib"]
+```
+
+### Paso 1: Compilar y testear
+
+```bash
+forge build
+forge test -vv
+```
+
+### Paso 2: Deploy en Anvil
+
+**Terminal 1: Levantar Anvil**
+
+```bash
+anvil
+```
+
+**Terminal 2: Configurar variables y desplegar**
+
+```bash
+export PK=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+export DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+export RPC=http://localhost:8545
+```
+
+**1. Desplegar AgentRegistry (Identity Registry - ERC-721):**
+
+```bash
+forge create contracts/AgentRegistry.sol:AgentRegistry \
+  --rpc-url $RPC \
+  --private-key $PK \
+  --constructor-args "Trustless Agents" "AGENT"
+```
+
+Desglose del comando:
+
+```
+forge create contracts/AgentRegistry.sol:AgentRegistry
+│            │                           │
+│            │                           └─ Nombre del contrato (linea 79)
+│            └─ Ruta al archivo .sol
+└─ Comando de Foundry para desplegar
+
+  --constructor-args "Trustless Agents" "AGENT"
+                     │                  │
+                     │                  └─ _symbol (linea 79: string memory _symbol)
+                     └─ _name (linea 79: string memory _name)
+
+Ejecuta el constructor (lineas 79-82 de AgentRegistry.sol):
+1. Guarda name = "Trustless Agents" (linea 80)
+2. Guarda symbol = "AGENT" (linea 81)
+   Cada agente registrado sera un NFT (ERC-721) con un agentId unico
+```
+
+Output esperado:
+
+```
+Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+Deployed to: 0x...                                        <- address del AgentRegistry (USAR ESTA)
+Transaction hash: 0x...
+```
+
+```bash
+export REGISTRY=0x...  # Deployed to del output
+```
+
+**2. Desplegar AgentReputation (Reputation Registry):**
+
+```bash
+forge create contracts/AgentReputation.sol:AgentReputation \
+  --rpc-url $RPC \
+  --private-key $PK \
+  --constructor-args $REGISTRY
+```
+
+Desglose del comando:
+
+```
+  --constructor-args $REGISTRY
+                     │
+                     └─ _identityRegistry (linea 66: address _identityRegistry)
+
+Ejecuta el constructor (lineas 66-68 de AgentReputation.sol):
+1. Guarda identityRegistry = AgentRegistry($REGISTRY) (linea 67)
+   Vincula al AgentRegistry para verificar que los agentIds existen
+```
+
+```bash
+export REPUTATION=0x...  # Deployed to del output
+```
+
+**3. Desplegar AgentValidation (Validation Registry):**
+
+```bash
+forge create contracts/AgentValidation.sol:AgentValidation \
+  --rpc-url $RPC \
+  --private-key $PK \
+  --constructor-args $REGISTRY
+```
+
+Desglose del comando:
+
+```
+  --constructor-args $REGISTRY
+                     │
+                     └─ _identityRegistry (linea 58: address _identityRegistry)
+
+Ejecuta el constructor (lineas 58-60 de AgentValidation.sol):
+1. Guarda identityRegistry = AgentRegistry($REGISTRY) (linea 59)
+   Vincula al AgentRegistry para verificar que los agentIds existen
+```
+
+```bash
+export VALIDATION=0x...  # Deployed to del output
+```
+
+### Paso 3: Flujo completo en Anvil
+
+```bash
+# 1. Registrar un agente (mint NFT) -> retorna agentId
+cast send $REGISTRY "register(string)" \
+  "https://agent.example.com/registration.json" \
+  --private-key $PK --rpc-url $RPC
+
+# Verificar agentId = 1
+cast call $REGISTRY "totalSupply()(uint256)" --rpc-url $RPC
+# 1
+
+# 2. Un cliente da feedback positivo al agente
+export CLIENT_PK=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+export CLIENT=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+
+cast send $REPUTATION "giveFeedback(uint256,int256,uint8,bytes32)" \
+  1 5 0 0x0000000000000000000000000000000000000000000000000000000000000000 \
+  --private-key $CLIENT_PK --rpc-url $RPC
+
+# 3. Un validator solicita validacion
+export VALIDATOR_PK=0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
+
+cast send $VALIDATION "validationRequest(address,uint256,bytes32)" \
+  $DEPLOYER 1 0x0000000000000000000000000000000000000000000000000000000000000000 \
+  --private-key $VALIDATOR_PK --rpc-url $RPC
+```
+
+---
+
 ## Vulnerabilidades relevantes
 
 ### 1. Sybil Attacks en Reputacion

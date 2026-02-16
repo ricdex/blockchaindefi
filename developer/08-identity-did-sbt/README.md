@@ -351,7 +351,156 @@ El patron mas poderoso combina ambos mundos: operaciones frecuentes en red priva
    3. No necesita acceso a la red privada
 ```
 
-### Ejercicio: Deploy en Sepolia y en Besu
+## Como ejecutar
+
+### Paso 0: Inicializar el proyecto Foundry
+
+Si el proyecto no tiene `foundry.toml` ni `lib/` (estado limpio):
+
+```bash
+cd developer/08-identity-did-sbt
+
+cp README.md README.md.bak
+forge init --no-git --force
+mv README.md.bak README.md
+rm -rf src/ script/
+rm -f test/Counter.t.sol
+
+git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+rm -rf lib/forge-std/.git
+```
+
+Edita `foundry.toml`:
+
+```toml
+[profile.default]
+src = "contracts"
+out = "out"
+libs = ["lib"]
+```
+
+### Paso 1: Compilar y testear
+
+```bash
+forge build
+forge test -vv
+```
+
+### Paso 2: Deploy en Anvil
+
+**Terminal 1: Levantar Anvil**
+
+```bash
+anvil
+```
+
+**Terminal 2: Configurar variables y desplegar**
+
+```bash
+export PK=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+export ADMIN=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+export RPC=http://localhost:8545
+```
+
+**Desplegar CredentialRegistry primero (para obtener su address):**
+
+```bash
+forge create contracts/CredentialRegistry.sol:CredentialRegistry \
+  --rpc-url $RPC \
+  --private-key $PK \
+  --constructor-args $ADMIN
+```
+
+> Nota: se pasa `$ADMIN` como placeholder del SoulboundToken address. En produccion
+> esto se resolveria con un patrón de deploy en dos pasos o prediccion de address.
+
+Desglose del comando:
+
+```
+forge create contracts/CredentialRegistry.sol:CredentialRegistry
+│            │                                │
+│            │                                └─ Nombre del contrato (linea 91 de CredentialRegistry.sol)
+│            └─ Ruta al archivo .sol
+└─ Comando de Foundry para desplegar
+
+  --constructor-args $ADMIN
+                     │
+                     └─ _soulboundToken (linea 91: address _soulboundToken)
+                        Ejecuta el constructor que guarda admin = msg.sender (linea 92)
+                        y vincula el SoulboundToken (linea 93)
+```
+
+Del output, copiar `Deployed to:`:
+
+```bash
+export REGISTRY=0x...  # Deployed to del output
+```
+
+**Desplegar SoulboundToken apuntando al Registry:**
+
+```bash
+forge create contracts/SoulboundToken.sol:SoulboundToken \
+  --rpc-url $RPC \
+  --private-key $PK \
+  --constructor-args "Academic Credentials" "ACRED" $REGISTRY
+```
+
+Desglose del comando:
+
+```
+  --constructor-args "Academic Credentials" "ACRED" $REGISTRY
+                     │                      │       │
+                     │                      │       └─ _registry (linea 85: address _registry)
+                     │                      └─ _symbol (linea 85: string memory _symbol)
+                     └─ _name (linea 85: string memory _name)
+
+Ejecuta el constructor (lineas 85-89 de SoulboundToken.sol):
+1. Guarda name = "Academic Credentials" (linea 86)
+2. Guarda symbol = "ACRED" (linea 87)
+3. Guarda registry = address del CredentialRegistry (linea 88)
+```
+
+Output esperado:
+
+```
+Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266    <- cuenta que desplego (ADMIN)
+Deployed to: 0x...                                        <- address del SoulboundToken (USAR ESTA)
+Transaction hash: 0x...                                   <- hash de la tx de deploy
+```
+
+```bash
+export SBT=0x...  # Deployed to del output
+```
+
+### Paso 3: Flujo completo en Anvil
+
+```bash
+# Registrar tipo de credencial (linea 102: registerCredentialType)
+cast send $REGISTRY "registerCredentialType(string,string)" \
+  "Bachelor CS" "Computer Science degree" \
+  --private-key $PK --rpc-url $RPC
+
+# Autorizar issuer para ese tipo (typeId = 0)
+cast send $REGISTRY "authorizeIssuer(uint256,address)" \
+  0 $ADMIN \
+  --private-key $PK --rpc-url $RPC
+
+# Emitir credencial al estudiante
+export STUDENT=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+
+cast send $REGISTRY "issueCredential(address,uint256,string)" \
+  $STUDENT 0 "ipfs://QmHash..." \
+  --private-key $PK --rpc-url $RPC
+
+# Verificar que el estudiante tiene la credencial
+cast call $REGISTRY "hasValidCredential(address,uint256)(bool)" \
+  $STUDENT 0 --rpc-url $RPC
+# true
+```
+
+---
+
+### Ejercicio adicional: Deploy en Sepolia y en Besu
 
 Despliega tu `CredentialRegistry` en dos redes diferentes para comparar la experiencia:
 
@@ -360,22 +509,15 @@ Despliega tu `CredentialRegistry` en dos redes diferentes para comparar la exper
 Prerequisito: tener SepoliaETH (ver [shared/testnet-setup.md](../../shared/testnet-setup.md))
 
 ```bash
-# 1. Configurar variables
 source .env  # SEPOLIA_RPC_URL, PRIVATE_KEY
 
-# 2. Desplegar SoulboundToken
-forge create contracts/SoulboundToken.sol:SoulboundToken \
-  --rpc-url $SEPOLIA_RPC_URL \
-  --private-key $PRIVATE_KEY \
-  --constructor-args "AcademicSBT" "ASBT"
-
-# 3. Desplegar CredentialRegistry (usar address del SoulboundToken)
+# Mismo flujo que Anvil pero apuntando a Sepolia
 forge create contracts/CredentialRegistry.sol:CredentialRegistry \
   --rpc-url $SEPOLIA_RPC_URL \
   --private-key $PRIVATE_KEY \
-  --constructor-args $SOULBOUND_TOKEN_ADDRESS
+  --constructor-args $PLACEHOLDER_ADDRESS
 
-# 4. Verificar en Sepolia Etherscan
+# Verificar en Sepolia Etherscan
 # https://sepolia.etherscan.io/address/TU_CONTRACT_ADDRESS
 ```
 
@@ -384,27 +526,11 @@ forge create contracts/CredentialRegistry.sol:CredentialRegistry \
 Prerequisito: red Besu levantada (ver [developer/11-private-networks](../11-private-networks/))
 
 ```bash
-# 1. Desplegar a la red Besu local
-forge create contracts/SoulboundToken.sol:SoulboundToken \
-  --rpc-url http://localhost:8545 \
-  --private-key $BESU_PRIVATE_KEY \
-  --constructor-args "AcademicSBT" "ASBT"
-
+# Mismo flujo pero apuntando a Besu
 forge create contracts/CredentialRegistry.sol:CredentialRegistry \
   --rpc-url http://localhost:8545 \
   --private-key $BESU_PRIVATE_KEY \
-  --constructor-args $SOULBOUND_TOKEN_ADDRESS
-
-# 2. Registrar tipo de credencial
-cast send $REGISTRY_ADDRESS "registerCredentialType(string)" "Bachelor CS" \
-  --rpc-url http://localhost:8545 \
-  --private-key $BESU_PRIVATE_KEY
-
-# 3. Emitir credencial
-cast send $REGISTRY_ADDRESS "issueCredential(address,uint256,string)" \
-  $STUDENT_ADDRESS 1 "ipfs://QmHash..." \
-  --rpc-url http://localhost:8545 \
-  --private-key $BESU_PRIVATE_KEY
+  --constructor-args $PLACEHOLDER_ADDRESS
 ```
 
 **Parte 3: Comparar resultados**

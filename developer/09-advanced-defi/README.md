@@ -258,6 +258,176 @@ Liquidity Providers          Flash Loan Flow
 
 ---
 
+## Como ejecutar
+
+### Paso 0: Inicializar el proyecto Foundry
+
+Si el proyecto no tiene `foundry.toml` ni `lib/` (estado limpio):
+
+```bash
+cd developer/09-advanced-defi
+
+cp README.md README.md.bak
+forge init --no-git --force
+mv README.md.bak README.md
+rm -rf src/ script/
+rm -f test/Counter.t.sol
+
+git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+rm -rf lib/forge-std/.git
+```
+
+Edita `foundry.toml`:
+
+```toml
+[profile.default]
+src = "contracts"
+out = "out"
+libs = ["lib"]
+```
+
+### Paso 1: Compilar y testear
+
+```bash
+forge build
+forge test -vv
+```
+
+### Paso 2: Deploy en Anvil
+
+**Terminal 1: Levantar Anvil**
+
+```bash
+anvil
+```
+
+**Terminal 2: Configurar variables y desplegar**
+
+```bash
+export PK=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+export DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+export RPC=http://localhost:8545
+```
+
+**1. Desplegar MockERC20 (token para el pool):**
+
+```bash
+forge create contracts/MockERC20.sol:MockERC20 \
+  --rpc-url $RPC \
+  --private-key $PK \
+  --constructor-args "Flash Token" "FTK"
+```
+
+Desglose del comando:
+
+```
+forge create contracts/MockERC20.sol:MockERC20
+│            │                       │
+│            │                       └─ Nombre del contrato (linea 21 de MockERC20.sol)
+│            └─ Ruta al archivo .sol
+└─ Comando de Foundry para desplegar
+
+  --constructor-args "Flash Token" "FTK"
+                     │              │
+                     │              └─ _symbol (linea 21: string memory _symbol)
+                     └─ _name (linea 21: string memory _name)
+
+Ejecuta el constructor (lineas 21-24 de MockERC20.sol):
+1. Guarda name = "Flash Token" (linea 22)
+2. Guarda symbol = "FTK" (linea 23)
+```
+
+Output esperado:
+
+```
+Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+Deployed to: 0x...                                        <- address del MockERC20 (USAR ESTA)
+Transaction hash: 0x...
+```
+
+```bash
+export TOKEN=0x...  # Deployed to del output
+```
+
+**2. Desplegar FlashLoanProvider:**
+
+```bash
+forge create contracts/FlashLoanProvider.sol:FlashLoanProvider \
+  --rpc-url $RPC \
+  --private-key $PK \
+  --constructor-args $TOKEN
+```
+
+Desglose del comando:
+
+```
+  --constructor-args $TOKEN
+                     │
+                     └─ _token (linea 76: address _token)
+
+Ejecuta el constructor (lineas 76-78 de FlashLoanProvider.sol):
+1. Guarda token = IERC20($TOKEN) (linea 77)
+   El pool opera sobre este token ERC-20
+```
+
+```bash
+export PROVIDER=0x...  # Deployed to del output
+```
+
+**3. Desplegar FlashLoanBorrower:**
+
+```bash
+forge create contracts/FlashLoanBorrower.sol:FlashLoanBorrower \
+  --rpc-url $RPC \
+  --private-key $PK \
+  --constructor-args $PROVIDER $TOKEN
+```
+
+Desglose del comando:
+
+```
+  --constructor-args $PROVIDER $TOKEN
+                     │         │
+                     │         └─ _token (linea 51: address _token)
+                     └─ _provider (linea 51: address _provider)
+
+Ejecuta el constructor (lineas 51-54 de FlashLoanBorrower.sol):
+1. Guarda provider = address del FlashLoanProvider (linea 52)
+2. Guarda token = IERC20($TOKEN) (linea 53)
+3. Inicializa shouldRepay = true (linea 54)
+```
+
+### Paso 3: Flujo completo en Anvil
+
+```bash
+# Mintear tokens y fondear el pool
+cast send $TOKEN "mint(address,uint256)" $DEPLOYER 1000000000000000000000 \
+  --private-key $PK --rpc-url $RPC
+
+# Aprobar al provider para mover tokens
+cast send $TOKEN "approve(address,uint256)" $PROVIDER 1000000000000000000000 \
+  --private-key $PK --rpc-url $RPC
+
+# Depositar liquidez en el pool (1000 tokens)
+cast send $PROVIDER "deposit(uint256)" 1000000000000000000000 \
+  --private-key $PK --rpc-url $RPC
+
+# Verificar balance del pool
+cast call $PROVIDER "poolBalance()(uint256)" --rpc-url $RPC
+# 1000000000000000000000 (1000 tokens)
+
+# Dar tokens al borrower para pagar el fee
+cast send $TOKEN "mint(address,uint256)" $BORROWER 10000000000000000000 \
+  --private-key $PK --rpc-url $RPC
+
+# Ejecutar flash loan (100 tokens)
+cast send $PROVIDER "flashLoan(address,uint256,bytes)" \
+  $BORROWER 100000000000000000000 0x \
+  --private-key $PK --rpc-url $RPC
+```
+
+---
+
 ## Vulnerabilidades relevantes
 
 ### 1. Flash Loan Price Manipulation
