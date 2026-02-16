@@ -1,0 +1,82 @@
+# Hyperledger FireFly Stack con conector Besu
+#
+# NOTA: Esta configuracion es de referencia. En la practica,
+# se recomienda usar el CLI de FireFly para crear y gestionar stacks:
+#
+#   ff init my-stack --blockchain-provider ethereum \
+#     --blockchain-connector ethconnect \
+#     --blockchain-node besu
+#   ff start my-stack
+#
+# El CLI genera un docker-compose optimizado automaticamente.
+# Este archivo ilustra los componentes principales del stack.
+#
+# Prerequisito: tener la red Besu (docker-compose.yml) levantada.
+
+services:
+  firefly-core:
+    image: ghcr.io/hyperledger/firefly:latest
+    container_name: firefly-core
+    ports:
+      - "5000:5000"   # API REST
+      - "5001:5001"   # Admin API
+    environment:
+      - FF_DATABASE_TYPE=sqlite3
+      - FF_DATABASE_SQLITE3_URL=/data/firefly.db
+    volumes:
+      - firefly-data:/data
+    depends_on:
+      - ethconnect
+      - ipfs
+    networks:
+      - firefly-network
+
+  ethconnect:
+    image: ghcr.io/hyperledger/firefly-ethconnect:latest
+    container_name: firefly-ethconnect
+    ports:
+      - "5102:8080"
+    environment:
+      - ETHCONNECT_URL=http://ethconnect:8080
+      - ETHCONNECT_INSTANCE=/data/ethconnect
+    volumes:
+      - ethconnect-data:/data
+    networks:
+      - firefly-network
+      - besu-network
+    # Se conecta a la red Besu existente via RPC
+    # Configurar el RPC de Besu node1: http://besu-node1:8545
+
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: firefly-ipfs
+    ports:
+      - "5101:5001"  # IPFS API
+    volumes:
+      - ipfs-data:/data/ipfs
+    networks:
+      - firefly-network
+
+  firefly-explorer:
+    image: ghcr.io/hyperledger/firefly-ui:latest
+    container_name: firefly-explorer
+    ports:
+      - "5109:80"    # Web UI
+    environment:
+      - FF_ENDPOINT=http://firefly-core:5000
+    depends_on:
+      - firefly-core
+    networks:
+      - firefly-network
+
+volumes:
+  firefly-data:
+  ethconnect-data:
+  ipfs-data:
+
+networks:
+  firefly-network:
+    driver: bridge
+  besu-network:
+    external: true
+    name: docker_besu-network

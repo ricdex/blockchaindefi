@@ -1,0 +1,131 @@
+# Hyperledger Besu - Red IBFT 2.0 de 4 nodos
+#
+# IMPORTANTE: Esta configuracion es para desarrollo y aprendizaje.
+# Las claves incluidas son de EJEMPLO. NUNCA usar en produccion.
+#
+# Uso:
+#   docker-compose up -d       # Levantar red
+#   docker-compose ps          # Verificar estado
+#   docker-compose logs -f     # Ver logs
+#   docker-compose down -v     # Detener y limpiar
+
+services:
+  node1:
+    image: hyperledger/besu:latest
+    container_name: besu-node1
+    command:
+      - --genesis-file=/config/genesis.json
+      - --rpc-http-enabled
+      - --rpc-http-api=ETH,NET,IBFT,WEB3,ADMIN
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-http-cors-origins=*
+      - --rpc-ws-enabled
+      - --rpc-ws-host=0.0.0.0
+      - --rpc-ws-port=8546
+      - --host-allowlist=*
+      - --min-gas-price=0
+      - --node-private-key-file=/config/keys/node1/key
+      - --data-path=/data
+      - --bootnodes
+    volumes:
+      - ./config:/config:ro
+      - node1-data:/data
+    ports:
+      - "8545:8545"
+      - "8546:8546"
+      - "30303:30303"
+    networks:
+      besu-network:
+        ipv4_address: 172.16.239.11
+
+  node2:
+    image: hyperledger/besu:latest
+    container_name: besu-node2
+    command:
+      - --genesis-file=/config/genesis.json
+      - --rpc-http-enabled
+      - --rpc-http-api=ETH,NET,IBFT,WEB3
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-http-cors-origins=*
+      - --host-allowlist=*
+      - --min-gas-price=0
+      - --node-private-key-file=/config/keys/node2/key
+      - --data-path=/data
+      - --bootnodes=enode://BOOTNODE_PUBKEY@172.16.239.11:30303
+    volumes:
+      - ./config:/config:ro
+      - node2-data:/data
+    ports:
+      - "8555:8545"
+    depends_on:
+      - node1
+    networks:
+      besu-network:
+        ipv4_address: 172.16.239.12
+
+  node3:
+    image: hyperledger/besu:latest
+    container_name: besu-node3
+    command:
+      - --genesis-file=/config/genesis.json
+      - --rpc-http-enabled
+      - --rpc-http-api=ETH,NET,IBFT,WEB3
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-http-cors-origins=*
+      - --host-allowlist=*
+      - --min-gas-price=0
+      - --node-private-key-file=/config/keys/node3/key
+      - --data-path=/data
+      - --bootnodes=enode://BOOTNODE_PUBKEY@172.16.239.11:30303
+    volumes:
+      - ./config:/config:ro
+      - node3-data:/data
+    ports:
+      - "8565:8545"
+    depends_on:
+      - node1
+    networks:
+      besu-network:
+        ipv4_address: 172.16.239.13
+
+  node4:
+    image: hyperledger/besu:latest
+    container_name: besu-node4
+    command:
+      - --genesis-file=/config/genesis.json
+      - --rpc-http-enabled
+      - --rpc-http-api=ETH,NET,IBFT,WEB3
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-http-cors-origins=*
+      - --host-allowlist=*
+      - --min-gas-price=0
+      - --node-private-key-file=/config/keys/node4/key
+      - --data-path=/data
+      - --bootnodes=enode://BOOTNODE_PUBKEY@172.16.239.11:30303
+    volumes:
+      - ./config:/config:ro
+      - node4-data:/data
+    ports:
+      - "8575:8545"
+    depends_on:
+      - node1
+    networks:
+      besu-network:
+        ipv4_address: 172.16.239.14
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:
+  node4-data:
+
+networks:
+  besu-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.239.0/24

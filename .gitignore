@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Foundry
+out/
+cache/
+lib/
+broadcast/
+
+# Hardhat
+artifacts/
+typechain-types/
+node_modules/
+
+# Dependencies / lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
