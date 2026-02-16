@@ -165,6 +165,7 @@ forge script script/Deploy.s.sol \
 forge create src/MyContract.sol:MyContract \
   --rpc-url $SEPOLIA_RPC_URL \
   --private-key $PRIVATE_KEY \
+  --broadcast \
   --verify
 ```
 

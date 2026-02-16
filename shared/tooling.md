@@ -8,6 +8,69 @@ Referencia practica de las herramientas usadas a lo largo de esta ruta de aprend
 
 Framework de desarrollo para Ethereum escrito en Rust. Rapido, nativo de Solidity para tests, y con herramientas de linea de comandos potentes.
 
+### Por que Foundry
+
+```
+Foundry vs otros frameworks:
+
++-------------------+------------------+------------------+------------------+
+| Dimension         | Foundry          | Hardhat          | Remix            |
++-------------------+------------------+------------------+------------------+
+| Lenguaje tests    | Solidity         | JavaScript/TS    | N/A (manual)     |
+| Velocidad compile | Muy rapida (Rust)| Lenta (JS)       | Media (browser)  |
+| Velocidad tests   | Muy rapida       | Lenta            | N/A              |
+| Fuzzing integrado | SI (nativo)      | No (plugin)      | No               |
+| Forking mainnet   | SI (anvil)       | SI (hardhat node)| SI (limitado)    |
+| Debugging         | Traces (-vvvv)   | console.log      | Debugger visual  |
+| Dependencias      | Git submodules   | npm packages     | Browser imports  |
+| Curva aprendizaje | Media            | Baja (si sabes JS)| Baja            |
++-------------------+------------------+------------------+------------------+
+```
+
+**Cuando usar Foundry:**
+
+- Tests escritos en Solidity (mismo lenguaje que el contrato, mas natural para testing de smart contracts)
+- Necesitas velocidad: compilacion y tests son ordenes de magnitud mas rapidos que Hardhat
+- Fuzzing: Foundry incluye fuzzer nativo que genera inputs aleatorios para encontrar edge cases
+- Proyectos donde el equipo trabaja exclusivamente en Solidity
+- Forking de mainnet para testear integraciones con protocolos reales (Uniswap, Aave, etc.)
+- Scripting de deploy con `forge script` (type-safe, en Solidity)
+- Analisis de gas preciso con `forge test --gas-report`
+
+**Cuando NO usar Foundry:**
+
+- Frontend integrado que necesita interactuar con contratos durante desarrollo (Hardhat + ethers.js/viem es mas natural)
+- Equipo que solo conoce JavaScript y no quiere aprender Solidity para tests
+- Prototipado rapido de una idea en 5 minutos (Remix es mas directo)
+- Necesitas plugins especificos del ecosistema Hardhat (verificacion en explorers exoticos, integraciones custom)
+- Proyectos legacy que ya usan Hardhat con cientos de tests en JS/TS (no vale la pena migrar)
+
+**En esta ruta de aprendizaje usamos Foundry porque:**
+
+1. Los tests en Solidity fuerzan a entender el lenguaje a fondo (no hay capa de abstraccion JS)
+2. El fuzzer nativo encuentra vulnerabilidades que tests manuales no cubren
+3. `forge test -vvvv` muestra traces completos de la EVM (util para entender que pasa internamente)
+4. `cast` permite interactuar con contratos desde la terminal sin escribir scripts
+5. Anvil levanta un nodo local instantaneamente para experimentar
+
+### Componentes de Foundry
+
+```
+Foundry = forge + cast + anvil + chisel
+
+  forge   Compilador, test runner, deployer, fuzzer
+          Lo usas para: build, test, coverage, deploy
+
+  cast    Cliente CLI para interactuar con la blockchain
+          Lo usas para: leer estado, enviar txs, convertir unidades, decodificar calldata
+
+  anvil   Nodo local de Ethereum en memoria
+          Lo usas para: desarrollo local, fork de mainnet, testing interactivo
+
+  chisel  REPL de Solidity (como un playground en la terminal)
+          Lo usas para: probar snippets de Solidity rapidamente
+```
+
 ### Instalacion
 
 ```bash
@@ -123,6 +186,50 @@ cast logs --from-block 18000000 --to-block latest \
 ## Anvil - Nodo local
 
 Anvil es el nodo local de Foundry. Levanta una instancia de Ethereum en memoria, ideal para desarrollo y testing.
+
+### Por que Anvil
+
+```
+Anvil vs otros nodos locales:
+
++-------------------+------------------+------------------+------------------+
+| Dimension         | Anvil            | Hardhat Node     | Ganache          |
++-------------------+------------------+------------------+------------------+
+| Velocidad inicio  | Instantaneo      | ~2s              | ~3-5s            |
+| Escrito en        | Rust             | JavaScript       | JavaScript       |
+| Fork de mainnet   | SI (rapido)      | SI (lento)       | SI (lento)       |
+| Manipular tiempo  | SI               | SI               | SI               |
+| Impersonar cuentas| SI               | SI               | No nativo        |
+| Persistencia      | No (en memoria)  | No               | Opcional (DB)    |
+| Mantenimiento     | Activo (Foundry) | Activo           | Descontinuado    |
+| Integracion       | forge, cast      | hardhat, ethers  | truffle, web3    |
++-------------------+------------------+------------------+------------------+
+```
+
+**Cuando usar Anvil:**
+
+- Desarrollo local con Foundry: es el complemento natural de `forge` y `cast`
+- Fork de mainnet para testear integraciones con protocolos reales (Uniswap, Aave, Compound)
+- Probar flujos de deploy antes de ir a testnet (rapido, gratis, sin esperas)
+- Simular escenarios avanzados: manipular tiempo, impersonar cuentas whale, setear balances
+- Testing interactivo donde necesitas un nodo persistente corriendo (no solo dentro de `forge test`)
+- Ensayar scripts de deploy con `forge script --fork-url http://localhost:8545`
+
+**Cuando NO usar Anvil:**
+
+- Necesitas persistencia entre sesiones (Anvil es efimero, al cerrarlo se pierde todo)
+- Quieres simular una red con multiples nodos y consenso real (usa Besu IBFT para eso)
+- Testing de produccion que requiere condiciones reales de red (latencia, gas variable, mempool)
+- Desarrollo frontend donde necesitas un nodo estable corriendo por horas/dias (Anvil puede reiniciarse y perder estado)
+- Validar comportamiento en redes especificas (L2 como Arbitrum/Optimism tienen diferencias que Anvil no replica exactamente)
+
+**En esta ruta de aprendizaje usamos Anvil porque:**
+
+1. Cero configuracion: `anvil` y ya tienes 10 cuentas con 10,000 ETH cada una
+2. Las private keys de las cuentas de prueba se muestran al iniciar (no necesitas wallet ni faucet)
+3. Es instantaneo: no hay que esperar confirmaciones, ideal para aprender iterando rapido
+4. Fork de mainnet permite practicar con tokens y protocolos reales sin gastar dinero
+5. Se integra perfectamente con `forge create --broadcast` y `cast send`
 
 ### Uso basico
 
@@ -517,7 +624,8 @@ besu = "http://localhost:8545"
 # Desplegar contrato a red Besu local
 forge create src/MyContract.sol:MyContract \
   --rpc-url http://localhost:8545 \
-  --private-key 0xTU_PRIVATE_KEY_DEL_GENESIS
+  --private-key 0xTU_PRIVATE_KEY_DEL_GENESIS \
+  --broadcast
 ```
 
 > Las cuentas pre-fondeadas y sus private keys estan en el `genesis.json` de la red. Ver [developer/11-private-networks](../developer/11-private-networks/) para detalles.

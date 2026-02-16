@@ -307,6 +307,7 @@ export RPC=http://localhost:8545
 forge create contracts/AgentRegistry.sol:AgentRegistry \
   --rpc-url $RPC \
   --private-key $PK \
+  --broadcast \
   --constructor-args "Trustless Agents" "AGENT"
 ```
 
@@ -319,6 +320,8 @@ forge create contracts/AgentRegistry.sol:AgentRegistry
 │            └─ Ruta al archivo .sol
 └─ Comando de Foundry para desplegar
 
+  --broadcast                 Envia la transaccion a la red (sin esto, solo simula)
+
   --constructor-args "Trustless Agents" "AGENT"
                      │                  │
                      │                  └─ _symbol (linea 79: string memory _symbol)
@@ -330,13 +333,7 @@ Ejecuta el constructor (lineas 79-82 de AgentRegistry.sol):
    Cada agente registrado sera un NFT (ERC-721) con un agentId unico
 ```
 
-Output esperado:
-
-```
-Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-Deployed to: 0x...                                        <- address del AgentRegistry (USAR ESTA)
-Transaction hash: 0x...
-```
+Del output, copiar `Deployed to:`:
 
 ```bash
 export REGISTRY=0x...  # Deployed to del output
@@ -348,6 +345,7 @@ export REGISTRY=0x...  # Deployed to del output
 forge create contracts/AgentReputation.sol:AgentReputation \
   --rpc-url $RPC \
   --private-key $PK \
+  --broadcast \
   --constructor-args $REGISTRY
 ```
 
@@ -373,6 +371,7 @@ export REPUTATION=0x...  # Deployed to del output
 forge create contracts/AgentValidation.sol:AgentValidation \
   --rpc-url $RPC \
   --private-key $PK \
+  --broadcast \
   --constructor-args $REGISTRY
 ```
 

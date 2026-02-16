@@ -315,6 +315,7 @@ export RPC=http://localhost:8545
 forge create contracts/MockERC20.sol:MockERC20 \
   --rpc-url $RPC \
   --private-key $PK \
+  --broadcast \
   --constructor-args "Flash Token" "FTK"
 ```
 
@@ -327,6 +328,8 @@ forge create contracts/MockERC20.sol:MockERC20
 │            └─ Ruta al archivo .sol
 └─ Comando de Foundry para desplegar
 
+  --broadcast                 Envia la transaccion a la red (sin esto, solo simula)
+
   --constructor-args "Flash Token" "FTK"
                      │              │
                      │              └─ _symbol (linea 21: string memory _symbol)
@@ -337,13 +340,7 @@ Ejecuta el constructor (lineas 21-24 de MockERC20.sol):
 2. Guarda symbol = "FTK" (linea 23)
 ```
 
-Output esperado:
-
-```
-Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-Deployed to: 0x...                                        <- address del MockERC20 (USAR ESTA)
-Transaction hash: 0x...
-```
+Del output, copiar `Deployed to:`:
 
 ```bash
 export TOKEN=0x...  # Deployed to del output
@@ -355,6 +352,7 @@ export TOKEN=0x...  # Deployed to del output
 forge create contracts/FlashLoanProvider.sol:FlashLoanProvider \
   --rpc-url $RPC \
   --private-key $PK \
+  --broadcast \
   --constructor-args $TOKEN
 ```
 
@@ -380,6 +378,7 @@ export PROVIDER=0x...  # Deployed to del output
 forge create contracts/FlashLoanBorrower.sol:FlashLoanBorrower \
   --rpc-url $RPC \
   --private-key $PK \
+  --broadcast \
   --constructor-args $PROVIDER $TOKEN
 ```
 
@@ -395,6 +394,10 @@ Ejecuta el constructor (lineas 51-54 de FlashLoanBorrower.sol):
 1. Guarda provider = address del FlashLoanProvider (linea 52)
 2. Guarda token = IERC20($TOKEN) (linea 53)
 3. Inicializa shouldRepay = true (linea 54)
+```
+
+```bash
+export BORROWER=0x...  # Deployed to del output
 ```
 
 ### Paso 3: Flujo completo en Anvil

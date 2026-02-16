@@ -367,6 +367,7 @@ export RPC=http://localhost:8545
 forge create contracts/MultiSigWallet.sol:MultiSigWallet \
   --rpc-url $RPC \
   --private-key $OWNER1_KEY \
+  --broadcast \
   --constructor-args "[$OWNER1,$OWNER2,$OWNER3]" 2
 ```
 
@@ -381,6 +382,7 @@ forge create contracts/MultiSigWallet.sol:MultiSigWallet
 
   --rpc-url $RPC              Nodo destino (Anvil en localhost:8545)
   --private-key $OWNER1_KEY   Cuenta que paga el gas del deploy
+  --broadcast                 Envia la transaccion a la red (sin esto, solo simula)
 
   --constructor-args "[$OWNER1,$OWNER2,$OWNER3]" 2
                      │                           │
@@ -396,15 +398,18 @@ Esto ejecuta el constructor (lineas 78-94 de MultiSigWallet.sol):
 Output esperado:
 
 ```
+No files changed, compilation skipped
 Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266    <- cuenta que desplego (OWNER1)
 Deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3   <- direccion del contrato (USAR ESTA)
-Transaction hash: 0xabc123...                              <- hash de la tx de deploy
+Transaction hash: 0x8421b4...                              <- hash de la tx de deploy
 ```
+
+> **Importante**: sin `--broadcast` el comando solo simula y NO despliega. Si ves
+> `Warning: To broadcast this transaction, add --broadcast`, agrega la flag.
 
 Del output, copiar la direccion de `Deployed to:` y exportarla:
 
 ```bash
-# Reemplazar con la direccion real del output
 export WALLET=0x5FbDB2315678afecb367f032d93F642f64180aa3
 ```
 

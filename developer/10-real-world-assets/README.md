@@ -331,7 +331,8 @@ export RPC=http://localhost:8545
 ```bash
 forge create contracts/IdentityRegistry.sol:IdentityRegistry \
   --rpc-url $RPC \
-  --private-key $PK
+  --private-key $PK \
+  --broadcast
 ```
 
 Desglose del comando:
@@ -343,6 +344,8 @@ forge create contracts/IdentityRegistry.sol:IdentityRegistry
 │            └─ Ruta al archivo .sol
 └─ Comando de Foundry para desplegar
 
+  --broadcast                 Envia la transaccion a la red (sin esto, solo simula)
+
   (sin --constructor-args porque el constructor no recibe parametros)
 
 Ejecuta el constructor (lineas 80-83 de IdentityRegistry.sol):
@@ -350,13 +353,7 @@ Ejecuta el constructor (lineas 80-83 de IdentityRegistry.sol):
 2. Agrega al deployer como compliance officer (linea 82)
 ```
 
-Output esperado:
-
-```
-Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266    <- ADMIN + COMPLIANCE_OFFICER
-Deployed to: 0x...                                        <- address del IdentityRegistry (USAR ESTA)
-Transaction hash: 0x...
-```
+Del output, copiar `Deployed to:`:
 
 ```bash
 export IDENTITY_REGISTRY=0x...  # Deployed to del output
@@ -368,6 +365,7 @@ export IDENTITY_REGISTRY=0x...  # Deployed to del output
 forge create contracts/RWAToken.sol:RWAToken \
   --rpc-url $RPC \
   --private-key $PK \
+  --broadcast \
   --constructor-args "Real Estate Fund I" "REF1" $IDENTITY_REGISTRY 10000000000000000000000
 ```
 
@@ -388,14 +386,6 @@ Ejecuta el constructor (lineas 127-146 de RWAToken.sol):
 2. Guarda name y symbol (lineas 135-136)
 3. Vincula el IdentityRegistry (linea 137)
 4. Otorga ADMIN, COMPLIANCE_OFFICER y AGENT roles al deployer (lineas 140-142)
-```
-
-Output esperado:
-
-```
-Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266    <- tiene todos los roles
-Deployed to: 0x...                                        <- address del RWAToken (USAR ESTA)
-Transaction hash: 0x...
 ```
 
 ```bash

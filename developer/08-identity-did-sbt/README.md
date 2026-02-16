@@ -408,6 +408,7 @@ export RPC=http://localhost:8545
 forge create contracts/CredentialRegistry.sol:CredentialRegistry \
   --rpc-url $RPC \
   --private-key $PK \
+  --broadcast \
   --constructor-args $ADMIN
 ```
 
@@ -422,6 +423,8 @@ forge create contracts/CredentialRegistry.sol:CredentialRegistry
 │            │                                └─ Nombre del contrato (linea 91 de CredentialRegistry.sol)
 │            └─ Ruta al archivo .sol
 └─ Comando de Foundry para desplegar
+
+  --broadcast                 Envia la transaccion a la red (sin esto, solo simula)
 
   --constructor-args $ADMIN
                      │
@@ -442,6 +445,7 @@ export REGISTRY=0x...  # Deployed to del output
 forge create contracts/SoulboundToken.sol:SoulboundToken \
   --rpc-url $RPC \
   --private-key $PK \
+  --broadcast \
   --constructor-args "Academic Credentials" "ACRED" $REGISTRY
 ```
 
@@ -460,13 +464,7 @@ Ejecuta el constructor (lineas 85-89 de SoulboundToken.sol):
 3. Guarda registry = address del CredentialRegistry (linea 88)
 ```
 
-Output esperado:
-
-```
-Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266    <- cuenta que desplego (ADMIN)
-Deployed to: 0x...                                        <- address del SoulboundToken (USAR ESTA)
-Transaction hash: 0x...                                   <- hash de la tx de deploy
-```
+Del output, copiar `Deployed to:`:
 
 ```bash
 export SBT=0x...  # Deployed to del output
@@ -515,6 +513,7 @@ source .env  # SEPOLIA_RPC_URL, PRIVATE_KEY
 forge create contracts/CredentialRegistry.sol:CredentialRegistry \
   --rpc-url $SEPOLIA_RPC_URL \
   --private-key $PRIVATE_KEY \
+  --broadcast \
   --constructor-args $PLACEHOLDER_ADDRESS
 
 # Verificar en Sepolia Etherscan
@@ -530,6 +529,7 @@ Prerequisito: red Besu levantada (ver [developer/11-private-networks](../11-priv
 forge create contracts/CredentialRegistry.sol:CredentialRegistry \
   --rpc-url http://localhost:8545 \
   --private-key $BESU_PRIVATE_KEY \
+  --broadcast \
   --constructor-args $PLACEHOLDER_ADDRESS
 ```
 
