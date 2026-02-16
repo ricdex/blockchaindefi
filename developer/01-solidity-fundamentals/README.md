@@ -343,20 +343,55 @@ Los tests de Foundry (`forge test`) ejecutan todo en una EVM en memoria que se d
 anvil
 ```
 
-Anvil muestra 10 cuentas pre-fondeadas con 10000 ETH cada una. Anotar las direcciones y private keys.
+Anvil muestra 10 cuentas pre-fondeadas con 10000 ETH cada una, numeradas del 0 al 9:
+
+```
+Available Accounts (output de anvil)
+==================
+(0) 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266  (10000.000 ETH)
+(1) 0x70997970C51812dc3A010C7d01b50e0d17dc79C8  (10000.000 ETH)
+(2) 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC  (10000.000 ETH)
+(3) 0x90F79bf6EB2c4f870365E785982E1f101E93b906  (10000.000 ETH)
+...
+(9) 0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199  (10000.000 ETH)
+
+Private Keys
+==================
+(0) 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+(1) 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+(2) 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
+...
+```
+
+> Estas cuentas y keys son **siempre las mismas** en Anvil (son deterministicas).
+> Son cuentas de prueba — nunca usar estas keys en redes reales.
+
+Para este ejercicio usamos las cuentas asi:
+
+```
+Cuenta 0 → OWNER1   (owner de la MultiSig + quien despliega el contrato)
+Cuenta 1 → OWNER2   (owner de la MultiSig)
+Cuenta 2 → OWNER3   (owner de la MultiSig)
+Cuenta 9 → RECEIVER (destinatario de prueba, no es owner)
+```
+
+Usamos la cuenta 9 como destinatario para que sea una cuenta separada de los owners
+y sea facil distinguir los roles en el ejercicio.
 
 **Terminal 2: Configurar variables y desplegar**
 
 ```bash
-# Private keys de las cuentas de Anvil (cuentas 0, 1, 2)
+# Cuentas de Anvil que usaremos como owners de la MultiSig (cuentas 0, 1, 2)
 export OWNER1_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 export OWNER2_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
 export OWNER3_KEY=0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
 
-# Direcciones correspondientes
 export OWNER1=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 export OWNER2=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 export OWNER3=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+
+# Cuenta 9 de Anvil como destinatario de prueba (no es owner)
+export RECEIVER=0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199
 
 export RPC=http://localhost:8545
 ```
@@ -410,28 +445,76 @@ Transaction hash: 0x8421b4...                              <- hash de la tx de d
 Del output, copiar la direccion de `Deployed to:` y exportarla:
 
 ```bash
-export WALLET=0x5FbDB2315678afecb367f032d93F642f64180aa3
+export MULTISIG=0x5FbDB2315678afecb367f032d93F642f64180aa3
 ```
+
+> **Nota**: `MULTISIG` es la direccion **del contrato**, no de una cuenta de usuario.
+> La MultiSig es un smart contract que actua como wallet: recibe, guarda y envia fondos
+> segun las reglas de quorum definidas en el constructor.
 
 **Verificar que el contrato esta desplegado:**
 
 ```bash
-cast call $WALLET "getTransactionCount()(uint256)" --rpc-url $RPC
+cast call $MULTISIG "getTransactionCount()(uint256)" --rpc-url $RPC
 # Debe retornar: 0
 ```
 
 > Si da error `does not have any code`, significa que Anvil fue reiniciado y la direccion ya no tiene contrato. Soluciones:
 > 1. Verificar que Anvil sigue corriendo en la otra terminal
 > 2. Redesplegar el contrato con `forge create` de nuevo
-> 3. Actualizar la variable `$WALLET` con la nueva direccion
+> 3. Actualizar la variable `$MULTISIG` con la nueva direccion
 
-**Fondear la wallet con ETH:**
+**Fondear el contrato con ETH:**
+
+> **Concepto clave: Balance intrinseco en Ethereum**
+>
+> En Ethereum, **toda direccion** (sea cuenta de usuario EOA o contrato) tiene un balance de ETH.
+> Este balance NO es una variable dentro del contrato — vive en el **state trie** de Ethereum,
+> una estructura de datos a nivel de protocolo que la EVM mantiene automaticamente.
+>
+> ```
+> State trie de Ethereum:
+> ┌──────────────────────────────────┬──────────────┐
+> │ Direccion                        │ Balance      │
+> ├──────────────────────────────────┼──────────────┤
+> │ 0xf39F... (OWNER1 - EOA)        │ 10000 ETH   │
+> │ 0x7099... (OWNER2 - EOA)        │ 10000 ETH   │
+> │ 0x5FbD... (MULTISIG - contrato) │ 0 ETH       │  <- empieza en 0
+> └──────────────────────────────────┴──────────────┘
+> ```
+>
+> El contrato MultiSig empieza con **0 ETH**. Para que pueda enviar fondos a otros,
+> primero alguien debe transferirle ETH. El contrato puede recibirlo gracias a:
+>
+> ```solidity
+> receive() external payable {}   // permite que el contrato reciba ETH
+> ```
+>
+> Despues de fondear con 5 ETH:
+>
+> ```
+> │ 0xf39F... (OWNER1)             │ 9995 ETH    │  <- -5 ETH
+> │ 0x5FbD... (MULTISIG)           │ 5 ETH       │  <- +5 ETH
+> ```
+>
+> Cuando los owners aprueban y ejecutan una transaccion, **el contrato envia
+> ETH desde su propio balance** — los owners solo firman, no ponen fondos:
+>
+> ```solidity
+> // En execute() - el contrato envia ETH al destinatario
+> (bool success, ) = tx.to.call{value: tx.value}(tx.data);
+> //                              ^^^^^^^^
+> //                              sale del balance del contrato
+> ```
+>
+> Es como una caja fuerte compartida: primero le metes dinero,
+> y despues necesitas N de M llaves para autorizar cada retiro.
 
 ```bash
-cast send $WALLET --value 5ether --private-key $OWNER1_KEY --rpc-url $RPC
+cast send $MULTISIG --value 5ether --private-key $OWNER1_KEY --rpc-url $RPC
 
-# Verificar balance
-cast balance $WALLET --rpc-url $RPC
+# Verificar balance del contrato
+cast balance $MULTISIG --rpc-url $RPC
 # 5000000000000000000 (5 ETH en wei)
 ```
 
@@ -450,26 +533,64 @@ FLUJO:
 **1. Submit: Owner1 propone enviar 1 ETH**
 
 ```bash
-# Cuenta 9 de Anvil como destinatario
-export RECEIVER=0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199
-
 # submit(address to, uint256 value, bytes data)
-cast send $WALLET "submit(address,uint256,bytes)" \
+cast send $MULTISIG "submit(address,uint256,bytes)" \
   $RECEIVER \
   1000000000000000000 \
-  0x \
+  0x00 \
   --private-key $OWNER1_KEY \
   --rpc-url $RPC
+```
+
+> **Nota**: usamos `0x00` en lugar de `0x` para bytes vacios. `cast` necesita al menos
+> un byte para reconocerlo como argumento valido de tipo `bytes`.
+
+Desglose del comando:
+
+```
+cast send $MULTISIG "submit(address,uint256,bytes)" $RECEIVER 1000000000000000000 0x00
+│         │          │                               │         │                  │
+│         │          │                               │         │                  └─ _data = 0x00 (vacio, sin calldata)
+│         │          │                               │         └─ _value = 1 ETH en wei
+│         │          │                               └─ _to = direccion del destinatario
+│         │          └─ Firma de la funcion (linea 111-114 de MultiSigWallet.sol)
+│         └─ Direccion del contrato MultiSig
+└─ Comando de Foundry para enviar una transaccion (modifica estado)
+
+  --private-key $OWNER1_KEY   Cuenta que firma y paga gas (debe ser owner, linea 115: onlyOwner)
+  --rpc-url $RPC              Nodo destino (Anvil)
+```
+
+> **`cast send` vs `cast call`**:
+> - `cast send` = transaccion real, modifica estado, cuesta gas
+> - `cast call` = lectura, no modifica nada, no cuesta gas
+
+Que pasa internamente al ejecutar este comando:
+
+```
+1. cast codifica los argumentos en ABI y envia la transaccion al contrato
+2. La EVM ejecuta submit() (linea 111):
+   a. Modifier onlyOwner (linea 53): verifica que OWNER1 esta en isOwner mapping
+   b. Crea un struct Transaction (linea 118-126):
+      Transaction {
+          to:            RECEIVER           (linea 38: struct campo to)
+          value:         1000000000000000000 (linea 39: struct campo value)
+          data:          0x                  (linea 40: struct campo data)
+          executed:      false               (linea 41: aun no se ejecuta)
+          confirmations: 0                   (linea 42: nadie ha confirmado)
+      }
+   c. Lo agrega al array transactions[] (linea 46) con txId = 0
+   d. Emite evento TransactionSubmitted (linea 128)
 ```
 
 Verificar:
 
 ```bash
 # getTransactionCount() -> debe ser 1
-cast call $WALLET "getTransactionCount()(uint256)" --rpc-url $RPC
+cast call $MULTISIG "getTransactionCount()(uint256)" --rpc-url $RPC
 
 # getTransaction(0) -> detalle de txId=0
-cast call $WALLET "getTransaction(uint256)(address,uint256,bytes,bool,uint256)" 0 --rpc-url $RPC
+cast call $MULTISIG "getTransaction(uint256)(address,uint256,bytes,bool,uint256)" 0 --rpc-url $RPC
 # (RECEIVER, 1000000000000000000, 0x, false, 0)
 #  to        value                data  executed  confirmations
 ```
@@ -477,19 +598,47 @@ cast call $WALLET "getTransaction(uint256)(address,uint256,bytes,bool,uint256)" 
 **2. Confirm: Owner1 confirma**
 
 ```bash
-cast send $WALLET "confirm(uint256)" 0 --private-key $OWNER1_KEY --rpc-url $RPC
+cast send $MULTISIG "confirm(uint256)" 0 --private-key $OWNER1_KEY --rpc-url $RPC
+```
+
+Desglose del comando:
+
+```
+cast send $MULTISIG "confirm(uint256)" 0
+│         │          │                  │
+│         │          │                  └─ _txId = 0 (la transaccion que propuso Owner1)
+│         │          └─ Firma de la funcion (linea 133 de MultiSigWallet.sol)
+│         └─ Direccion del contrato
+└─ Envia transaccion
+
+  --private-key $OWNER1_KEY   Quien confirma (debe ser owner y no haber confirmado ya)
+```
+
+Que pasa internamente:
+
+```
+1. La EVM ejecuta confirm(0) (linea 133):
+   a. Modifier onlyOwner (linea 53): verifica que es owner
+   b. Modifier txExists (linea 57): verifica que txId=0 existe en transactions[]
+   c. Modifier notExecuted (linea 62): verifica que executed == false
+   d. Modifier notConfirmed (linea 67): verifica que confirmed[0][OWNER1] == false
+   e. Incrementa confirmations de 0 a 1 (linea 137)
+   f. Marca confirmed[0][OWNER1] = true (linea 138)
+   g. Emite evento TransactionConfirmed (linea 140)
 ```
 
 **3. Confirm: Owner2 confirma (se alcanza quorum: 2/3)**
 
 ```bash
-cast send $WALLET "confirm(uint256)" 0 --private-key $OWNER2_KEY --rpc-url $RPC
+cast send $MULTISIG "confirm(uint256)" 0 --private-key $OWNER2_KEY --rpc-url $RPC
 ```
+
+> Mismo flujo que arriba pero con OWNER2. Ahora confirmations = 2 (>= required).
 
 Verificar confirmaciones:
 
 ```bash
-cast call $WALLET "getTransaction(uint256)(address,uint256,bytes,bool,uint256)" 0 --rpc-url $RPC
+cast call $MULTISIG "getTransaction(uint256)(address,uint256,bytes,bool,uint256)" 0 --rpc-url $RPC
 # Ultimo campo (confirmations) ahora es 2
 ```
 
@@ -500,16 +649,50 @@ cast call $WALLET "getTransaction(uint256)(address,uint256,bytes,bool,uint256)" 
 cast balance $RECEIVER --rpc-url $RPC
 
 # Ejecutar
-cast send $WALLET "execute(uint256)" 0 --private-key $OWNER3_KEY --rpc-url $RPC
+cast send $MULTISIG "execute(uint256)" 0 --private-key $OWNER3_KEY --rpc-url $RPC
 
 # Balance del receiver DESPUES (deberia tener +1 ETH)
 cast balance $RECEIVER --rpc-url $RPC
 ```
 
+Desglose del comando:
+
+```
+cast send $MULTISIG "execute(uint256)" 0
+│         │          │                  │
+│         │          │                  └─ _txId = 0
+│         │          └─ Firma de la funcion (linea 145 de MultiSigWallet.sol)
+│         └─ Direccion del contrato
+└─ Envia transaccion
+
+  --private-key $OWNER3_KEY   Quien ejecuta (cualquier owner puede, si hay quorum)
+```
+
+Que pasa internamente:
+
+```
+1. La EVM ejecuta execute(0) (linea 145):
+   a. Modifiers: onlyOwner, txExists, notExecuted (mismas validaciones)
+   b. Verifica quorum (linea 150): confirmations(2) >= required(2) -> OK
+   c. Marca executed = true (linea 154)
+   d. Transfiere ETH (linea 156):
+      txn.to.call{value: txn.value}(txn.data)
+      │         │                    │
+      │         │                    └─ data = 0x (sin calldata adicional)
+      │         └─ value = 1 ETH (sale del balance del CONTRATO)
+      └─ to = RECEIVER
+   e. Si la transferencia falla, revierte (linea 157)
+   f. Emite evento TransactionExecuted (linea 159)
+
+Estado despues:
+  MULTISIG balance: 5 ETH - 1 ETH = 4 ETH
+  RECEIVER balance: 10000 ETH + 1 ETH = 10001 ETH
+```
+
 **5. Verificar que quedo ejecutada**
 
 ```bash
-cast call $WALLET "getTransaction(uint256)(address,uint256,bytes,bool,uint256)" 0 --rpc-url $RPC
+cast call $MULTISIG "getTransaction(uint256)(address,uint256,bytes,bool,uint256)" 0 --rpc-url $RPC
 # El campo "executed" ahora es true
 ```
 
@@ -517,19 +700,19 @@ cast call $WALLET "getTransaction(uint256)(address,uint256,bytes,bool,uint256)" 
 
 ```bash
 # Owner1 propone segunda transaccion (txId=1)
-cast send $WALLET "submit(address,uint256,bytes)" \
-  $RECEIVER 500000000000000000 0x \
+cast send $MULTISIG "submit(address,uint256,bytes)" \
+  $RECEIVER 500000000000000000 0x00 \
   --private-key $OWNER1_KEY --rpc-url $RPC
 
 # Owner1 y Owner2 confirman
-cast send $WALLET "confirm(uint256)" 1 --private-key $OWNER1_KEY --rpc-url $RPC
-cast send $WALLET "confirm(uint256)" 1 --private-key $OWNER2_KEY --rpc-url $RPC
+cast send $MULTISIG "confirm(uint256)" 1 --private-key $OWNER1_KEY --rpc-url $RPC
+cast send $MULTISIG "confirm(uint256)" 1 --private-key $OWNER2_KEY --rpc-url $RPC
 
 # Owner1 se arrepiente y revoca
-cast send $WALLET "revoke(uint256)" 1 --private-key $OWNER1_KEY --rpc-url $RPC
+cast send $MULTISIG "revoke(uint256)" 1 --private-key $OWNER1_KEY --rpc-url $RPC
 
 # Intentar ejecutar -> FALLA (solo 1 confirmacion, se necesitan 2)
-cast send $WALLET "execute(uint256)" 1 --private-key $OWNER3_KEY --rpc-url $RPC
+cast send $MULTISIG "execute(uint256)" 1 --private-key $OWNER3_KEY --rpc-url $RPC
 # REVERT: NotEnoughConfirmations(1, 1, 2)
 ```
 
@@ -539,8 +722,8 @@ cast send $WALLET "execute(uint256)" 1 --private-key $OWNER3_KEY --rpc-url $RPC
 # Cuenta que NO es owner intenta submit -> FALLA
 export NON_OWNER_KEY=0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a
 
-cast send $WALLET "submit(address,uint256,bytes)" \
-  $RECEIVER 1000000000000000000 0x \
+cast send $MULTISIG "submit(address,uint256,bytes)" \
+  $RECEIVER 1000000000000000000 0x00 \
   --private-key $NON_OWNER_KEY --rpc-url $RPC
 # REVERT: NotOwner(0x...)
 ```
@@ -549,11 +732,57 @@ cast send $WALLET "submit(address,uint256,bytes)" \
 
 | Error | Causa | Solucion |
 |-------|-------|----------|
-| `does not have any code` | Anvil fue reiniciado o la direccion es incorrecta | Redesplegar con `forge create` y actualizar `$WALLET` |
+| `does not have any code` | Anvil fue reiniciado o la direccion es incorrecta | Redesplegar con `forge create` y actualizar `$MULTISIG` |
 | `NotOwner` | La private key no corresponde a un owner | Usar `OWNER1_KEY`, `OWNER2_KEY` o `OWNER3_KEY` |
 | `NotEnoughConfirmations` | Faltan confirmaciones | Necesitas >= 2 confirms antes de `execute` |
 | `TxAlreadyExecuted` | La transaccion ya fue ejecutada | Proponer una nueva transaccion con `submit` |
 | `TxAlreadyConfirmed` | Este owner ya confirmo esta tx | Cada owner solo puede confirmar una vez |
+
+### Como leer errores de cast send
+
+Cuando una transaccion va a fallar, `cast send` **no la envia**. Primero simula la
+transaccion para estimar el gas, y si la simulacion revierte, muestra el error sin
+gastar gas. Ejemplo:
+
+```
+Error: Failed to estimate gas: server returned an error response:
+  error code 3: execution reverted:
+  custom error 0x9d8c9bc8:
+  0000000000000000000000000000000000000000000000000000000000000000
+  000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb92266,
+  data: "0x9d8c9bc8..."
+  TxAlreadyConfirmed(0, 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266)
+```
+
+Se lee asi:
+
+```
+Failed to estimate gas       ← cast simula antes de enviar; si revierte, no envia
+                                (no es un error de gas, es que la tx va a fallar)
+
+execution reverted           ← la EVM hizo revert al simular
+
+custom error 0x9d8c9bc8      ← selector del error: primeros 4 bytes del keccak256
+                                de la firma del error
+                                keccak256("TxAlreadyConfirmed(uint256,address)")
+                                = 0x9d8c9bc8...
+
+data: "0x9d8c9bc8..."        ← argumentos del error codificados en ABI
+                                txId = 0
+                                address = 0xf39F...
+
+TxAlreadyConfirmed(0, 0xf39F...)  ← Foundry decodifica el error automaticamente
+                                     porque tiene el ABI del contrato compilado
+```
+
+> Los custom errors (definidos en lineas 19-29 del contrato) son mas baratos en gas
+> que strings (`require(cond, "mensaje")`) y Foundry los decodifica automaticamente.
+> Si ves un error con selector hex que Foundry no decodifica, puedes buscarlo manualmente:
+>
+> ```bash
+> cast 4byte 0x9d8c9bc8
+> # TxAlreadyConfirmed(uint256,address)
+> ```
 
 ### Resumen de comandos
 
