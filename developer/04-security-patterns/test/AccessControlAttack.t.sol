@@ -79,7 +79,8 @@ contract AccessControlAttackTest is Test {
 
     function test_VulnerableAC_OwnerCanWithdraw() public {
         // El owner legitimo puede retirar normalmente
-        vm.prank(owner);
+        // vm.prank(owner, owner) setea AMBOS msg.sender Y tx.origin al owner
+        vm.prank(owner, owner);
         vulnerableContract.withdraw(payable(owner));
         assertEq(owner.balance, CONTRACT_BALANCE);
     }
@@ -102,8 +103,9 @@ contract AccessControlAttackTest is Test {
         uint256 thiefBalanceBefore = thief.balance;
 
         // El owner es enganado para llamar claimReward() del phisher
-        // tx.origin = owner, asi que pasa el check en VulnerableAccessControl
-        vm.prank(owner);
+        // vm.prank(owner, owner): msg.sender del phisher = owner, tx.origin = owner
+        // Dentro de VulnerableAccessControl: msg.sender = phisher, tx.origin = owner (pasa!)
+        vm.prank(owner, owner);
         phisher.claimReward();
 
         // El thief recibe todos los fondos

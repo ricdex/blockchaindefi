@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {MockERC20} from "../contracts/MockERC20.sol";
@@ -179,7 +179,7 @@ contract FlashLoanTest is Test {
         assertEq(provider.calculateFee(0), 0);                    // 0 * 0.001 = 0
         assertEq(provider.calculateFee(100_000e18), 100e18);      // 100,000 * 0.001 = 100
         assertEq(provider.calculateFee(1), 0);                    // rounds down
-        assertEq(provider.calculateFee(10_000), 1);               // exactly 1 wei fee
+        assertEq(provider.calculateFee(1_000), 1);               // exactly 1 wei fee (1000 * 10 / 10000 = 1)
     }
 
     // -----------------------------------------------------------------------

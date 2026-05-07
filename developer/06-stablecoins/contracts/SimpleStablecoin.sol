@@ -78,6 +78,7 @@ contract SimpleStablecoin {
     error NoDebtToLiquidate();
     error InsufficientCollateral();
     error TransferFailed();
+    error BurnExceedsDebt(uint256 amount, uint256 debt);
 
     // =========================================================================
     // Constructor
@@ -144,7 +145,7 @@ contract SimpleStablecoin {
     /// @param amount Amount of sUSD to burn (18 decimals)
     function burnStablecoin(uint256 amount) external {
         if (amount == 0) revert ZeroAmount();
-        if (amount > cdps[msg.sender].debt) revert ZeroAmount();
+        if (amount > cdps[msg.sender].debt) revert BurnExceedsDebt(amount, cdps[msg.sender].debt);
 
         cdps[msg.sender].debt -= amount;
         _burn(msg.sender, amount);

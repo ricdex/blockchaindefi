@@ -69,6 +69,8 @@ contract SimpleAMM {
     error TransferFailed();
     error InsufficientBalance();
     error InsufficientAllowance();
+    error IdenticalTokens();
+    error ZeroAddress();
 
     // -------------------------------------------------------
     // Constructor
@@ -76,8 +78,8 @@ contract SimpleAMM {
     /// @param _tokenA Direccion del primer token
     /// @param _tokenB Direccion del segundo token
     constructor(address _tokenA, address _tokenB) {
-        require(_tokenA != _tokenB, "Identical tokens");
-        require(_tokenA != address(0) && _tokenB != address(0), "Zero address");
+        if (_tokenA == _tokenB) revert IdenticalTokens();
+        if (_tokenA == address(0) || _tokenB == address(0)) revert ZeroAddress();
 
         tokenA = IERC20(_tokenA);
         tokenB = IERC20(_tokenB);
@@ -207,10 +209,12 @@ contract SimpleAMM {
     /// @notice Intercambia un token por otro
     /// @param tokenIn Direccion del token que se deposita
     /// @param amountIn Cantidad del token a depositar
+    /// @param minAmountOut Minimo de tokens de salida aceptable (proteccion contra slippage)
     /// @return amountOut Cantidad del token recibido
     function swap(
         address tokenIn,
-        uint256 amountIn
+        uint256 amountIn,
+        uint256 minAmountOut
     ) external returns (uint256 amountOut) {
         if (amountIn == 0) revert ZeroAmount();
 
@@ -238,6 +242,9 @@ contract SimpleAMM {
         amountOut = (reserveOut * amountInWithFee) / (reserveIn * 1000 + amountInWithFee);
 
         if (amountOut == 0) revert InsufficientLiquidity();
+
+        // Verificar slippage: el output debe ser al menos minAmountOut
+        if (amountOut < minAmountOut) revert SlippageTooHigh();
 
         // Transferir token de salida
         _safeTransfer(outputToken, msg.sender, amountOut);

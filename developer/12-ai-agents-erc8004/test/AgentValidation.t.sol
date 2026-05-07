@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test, console} from "forge-std/Test.sol";
 import {AgentRegistry} from "../contracts/AgentRegistry.sol";
 import {AgentValidation} from "../contracts/AgentValidation.sol";
+import {IValidationRegistry} from "../contracts/interfaces/IValidationRegistry.sol";
 
 contract AgentValidationTest is Test {
     AgentRegistry public identityRegistry;
@@ -56,7 +57,7 @@ contract AgentValidationTest is Test {
     function test_validationRequest_emitsEvent() public {
         vm.prank(agentOwner);
         vm.expectEmit(true, true, false, true);
-        emit AgentValidation.ValidationRequested(validator1, agentId, "https://request.com", requestHash1);
+        emit IValidationRegistry.ValidationRequested(validator1, agentId, "https://request.com", requestHash1);
 
         validation.validationRequest(validator1, agentId, "https://request.com", requestHash1);
     }
@@ -113,7 +114,7 @@ contract AgentValidationTest is Test {
 
         vm.prank(validator1);
         vm.expectEmit(true, true, true, true);
-        emit AgentValidation.ValidationResponded(
+        emit IValidationRegistry.ValidationResponded(
             validator1, agentId, requestHash1, 85, "https://response.com", keccak256("report"), "security"
         );
 

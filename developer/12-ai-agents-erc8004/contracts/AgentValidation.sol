@@ -79,10 +79,10 @@ contract AgentValidation is IValidationRegistry {
         string memory requestURI,
         bytes32 requestHash
     ) external {
-        // Must be called by agent owner or approved operator
+        // Existence must be checked before ownerOf to avoid TokenDoesNotExist revert
+        if (!identityRegistry.exists(agentId)) revert AgentDoesNotExist();
         if (!_isOwnerOrApproved(msg.sender, agentId)) revert NotOwnerOrApproved();
         if (validatorAddress == address(0)) revert ZeroAddress();
-        if (!identityRegistry.exists(agentId)) revert AgentDoesNotExist();
         if (_validations[requestHash].exists) revert RequestAlreadyExists();
 
         _validations[requestHash] = ValidationEntry({

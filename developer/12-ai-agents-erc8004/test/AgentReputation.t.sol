@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test, console} from "forge-std/Test.sol";
 import {AgentRegistry} from "../contracts/AgentRegistry.sol";
 import {AgentReputation} from "../contracts/AgentReputation.sol";
+import {IReputationRegistry} from "../contracts/interfaces/IReputationRegistry.sol";
 
 contract AgentReputationTest is Test {
     AgentRegistry public identityRegistry;
@@ -54,7 +55,7 @@ contract AgentReputationTest is Test {
     function test_giveFeedback_emitsEvent() public {
         vm.prank(client1);
         vm.expectEmit(true, true, false, true);
-        emit AgentReputation.NewFeedback(
+        emit IReputationRegistry.NewFeedback(
             agentId, client1, 0, 5, 0, "quality", "quality", "speed", "https://endpoint", "ipfs://review", bytes32(0)
         );
 
@@ -143,7 +144,7 @@ contract AgentReputationTest is Test {
 
         vm.prank(client1);
         vm.expectEmit(true, true, true, false);
-        emit AgentReputation.FeedbackRevoked(agentId, client1, 0);
+        emit IReputationRegistry.FeedbackRevoked(agentId, client1, 0);
 
         reputation.revokeFeedback(agentId, 0);
     }
@@ -187,7 +188,7 @@ contract AgentReputationTest is Test {
 
         vm.prank(agentOwner);
         vm.expectEmit(true, true, false, true);
-        emit AgentReputation.ResponseAppended(
+        emit IReputationRegistry.ResponseAppended(
             agentId, client1, 0, agentOwner, "ipfs://response", keccak256("response")
         );
 

@@ -1,0 +1,5 @@
+[profile.default]
+src = "contracts"
+test = "test"
+out = "out"
+libs = ["../01-solidity-fundamentals/lib"]

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 import {IERC20} from "./interfaces/IERC20.sol";
 import {IFlashLoanReceiver} from "./interfaces/IFlashLoanReceiver.sol";
@@ -21,6 +21,7 @@ contract FlashLoanProvider {
     error ZeroAmount();
     error InsufficientDeposit(uint256 available, uint256 requested);
     error ReentrantCall();
+    error TransferFailed();
 
     // -----------------------------------------------------------------------
     // Events
@@ -90,7 +91,7 @@ contract FlashLoanProvider {
         if (amount == 0) revert ZeroAmount();
 
         deposits[msg.sender] += amount;
-        token.transferFrom(msg.sender, address(this), amount);
+        if (!token.transferFrom(msg.sender, address(this), amount)) revert TransferFailed();
 
         emit Deposit(msg.sender, amount);
     }
@@ -106,7 +107,7 @@ contract FlashLoanProvider {
         }
 
         deposits[msg.sender] -= amount;
-        token.transfer(msg.sender, amount);
+        if (!token.transfer(msg.sender, amount)) revert TransferFailed();
 
         emit Withdrawal(msg.sender, amount);
     }
@@ -138,7 +139,7 @@ contract FlashLoanProvider {
         uint256 expectedBalance = poolBalance + fee;
 
         // 1. Transfer tokens to the borrower
-        token.transfer(borrower, amount);
+        if (!token.transfer(borrower, amount)) revert TransferFailed();
 
         // 2. Invoke the borrower callback
         IFlashLoanReceiver(borrower).onFlashLoan(msg.sender, amount, fee, data);

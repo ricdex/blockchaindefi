@@ -36,6 +36,10 @@ contract PriceFeedConsumerTest is Test {
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
 
+        // Avanzar tiempo a 4h para que las operaciones `block.timestamp - N hours` no hagan underflow
+        // (en Foundry, block.timestamp empieza en 1 por defecto)
+        vm.warp(4 hours);
+
         // Deploy mock price feed y consumer
         mockFeed = new MockAggregatorV3(INITIAL_ETH_PRICE, FEED_DECIMALS);
         consumer = new PriceFeedConsumer(address(mockFeed));

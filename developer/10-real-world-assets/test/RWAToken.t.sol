@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {IdentityRegistry} from "../contracts/IdentityRegistry.sol";
@@ -348,17 +348,22 @@ contract RWATokenTest is Test {
 
     function test_grantRole_onlyAdmin() public {
         address newOfficer = makeAddr("newOfficer");
+        // Pre-cache role constant: vm.prank applies to the next external call,
+        // and COMPLIANCE_OFFICER_ROLE() is itself a staticcall that would consume it.
+        bytes32 coRole = token.COMPLIANCE_OFFICER_ROLE();
 
         vm.prank(admin);
-        token.grantRole(token.COMPLIANCE_OFFICER_ROLE(), newOfficer);
+        token.grantRole(coRole, newOfficer);
 
-        assertTrue(token.hasRole(token.COMPLIANCE_OFFICER_ROLE(), newOfficer));
+        assertTrue(token.hasRole(coRole, newOfficer));
     }
 
     function test_grantRole_revertsForNonAdmin() public {
+        bytes32 coRole = token.COMPLIANCE_OFFICER_ROLE();
+
         vm.prank(alice);
         vm.expectRevert(RWAToken.NotAdmin.selector);
-        token.grantRole(token.COMPLIANCE_OFFICER_ROLE(), alice);
+        token.grantRole(coRole, alice);
     }
 
     function test_revokeRole_removesPermission() public {

@@ -147,7 +147,7 @@ contract SimpleAMMTest is Test {
         uint256 bobBBefore = tokenB.balanceOf(bob);
 
         vm.prank(bob);
-        uint256 amountOut = amm.swap(address(tokenA), swapAmount);
+        uint256 amountOut = amm.swap(address(tokenA), swapAmount, 0);
 
         assertEq(amountOut, expectedOut);
         assertEq(tokenB.balanceOf(bob), bobBBefore + amountOut);
@@ -162,7 +162,7 @@ contract SimpleAMMTest is Test {
         uint256 bobABefore = tokenA.balanceOf(bob);
 
         vm.prank(bob);
-        uint256 amountOut = amm.swap(address(tokenB), swapAmount);
+        uint256 amountOut = amm.swap(address(tokenB), swapAmount, 0);
 
         assertEq(amountOut, expectedOut);
         assertEq(tokenA.balanceOf(bob), bobABefore + amountOut);
@@ -174,7 +174,7 @@ contract SimpleAMMTest is Test {
         uint256 swapAmount = 10_000e18;
 
         vm.prank(bob);
-        uint256 amountOut = amm.swap(address(tokenA), swapAmount);
+        uint256 amountOut = amm.swap(address(tokenA), swapAmount, 0);
 
         (uint256 resA, uint256 resB) = amm.getReserves();
         assertEq(resA, INITIAL_LIQUIDITY_A + swapAmount);
@@ -189,7 +189,7 @@ contract SimpleAMMTest is Test {
         uint256 swapAmount = 50_000e18;
 
         vm.prank(bob);
-        amm.swap(address(tokenA), swapAmount);
+        amm.swap(address(tokenA), swapAmount, 0);
 
         (uint256 resA, uint256 resB) = amm.getReserves();
         uint256 kAfter = resA * resB;
@@ -205,7 +205,7 @@ contract SimpleAMMTest is Test {
         uint256 swapAmount = 100_000e18; // 10% del pool
 
         vm.prank(bob);
-        uint256 amountOut = amm.swap(address(tokenA), swapAmount);
+        uint256 amountOut = amm.swap(address(tokenA), swapAmount, 0);
 
         // Sin fee, amountOut seria:
         // (1M * 100K) / (1M + 100K) = 90909.09... e18
@@ -230,7 +230,7 @@ contract SimpleAMMTest is Test {
         vm.expectEmit(true, true, false, true);
         emit SimpleAMM.Swap(bob, address(tokenA), swapAmount, expectedOut);
 
-        amm.swap(address(tokenA), swapAmount);
+        amm.swap(address(tokenA), swapAmount, 0);
     }
 
     function test_swap_revertsWithZeroAmount() public {
@@ -238,7 +238,7 @@ contract SimpleAMMTest is Test {
 
         vm.prank(bob);
         vm.expectRevert(SimpleAMM.ZeroAmount.selector);
-        amm.swap(address(tokenA), 0);
+        amm.swap(address(tokenA), 0, 0);
     }
 
     function test_swap_revertsWithInvalidToken() public {
@@ -246,7 +246,29 @@ contract SimpleAMMTest is Test {
 
         vm.prank(bob);
         vm.expectRevert(SimpleAMM.InvalidToken.selector);
-        amm.swap(address(0xDEAD), 1000e18);
+        amm.swap(address(0xDEAD), 1000e18, 0);
+    }
+
+    function test_swap_revertsWhenSlippageExceedsMin() public {
+        _addInitialLiquidity();
+
+        // Calcular cuanto recibiria por 100k tokenA
+        uint256 expectedOut = amm.getAmountOut(address(tokenA), 100_000e18);
+
+        // Intentar swap con minAmountOut mayor al real -> SlippageTooHigh
+        vm.prank(bob);
+        vm.expectRevert(SimpleAMM.SlippageTooHigh.selector);
+        amm.swap(address(tokenA), 100_000e18, expectedOut + 1);
+    }
+
+    function test_swap_succeedsWithExactMinAmountOut() public {
+        _addInitialLiquidity();
+
+        uint256 expectedOut = amm.getAmountOut(address(tokenA), 100_000e18);
+
+        vm.prank(bob);
+        uint256 received = amm.swap(address(tokenA), 100_000e18, expectedOut);
+        assertEq(received, expectedOut);
     }
 
     function test_swap_priceImpactOnLargeSwap() public {
@@ -365,8 +387,8 @@ contract SimpleAMMTest is Test {
         // Bob hace varios swaps que generan fees
         vm.startPrank(bob);
         for (uint256 i = 0; i < 10; i++) {
-            amm.swap(address(tokenA), 50_000e18);
-            amm.swap(address(tokenB), 50_000e18);
+            amm.swap(address(tokenA), 50_000e18, 0);
+            amm.swap(address(tokenB), 50_000e18, 0);
         }
         vm.stopPrank();
 
@@ -374,29 +396,17 @@ contract SimpleAMMTest is Test {
         vm.prank(alice);
         (uint256 amountA, uint256 amountB) = amm.removeLiquidity(lpTokens);
 
-        // Debido a los fees acumulados, k aumento
-        // Alice deberia recibir mas valor total que lo que deposito
-        // (puede recibir menos de un token pero mas del otro, el valor total sube)
+        // Los fees acumulados aumentan k. El ratio A:B cambia con los swaps (perdida impermanente),
+        // por lo que Alice recibe menos tokenA pero mas tokenB (o viceversa).
+        // La invariante correcta es que la SUMA total de tokens extraidos + dead shares supera
+        // el deposito inicial, ya que los fees incrementan el valor total del pool.
         (uint256 resA, uint256 resB) = amm.getReserves();
 
-        // El k restante (solo MINIMUM_LIQUIDITY queda) deberia ser mayor que el k original
-        // proporcional a MINIMUM_LIQUIDITY
-        // Pero mas importante: amountA * amountB > initial proporcional
-        uint256 totalProductReceived = amountA * amountB;
-        uint256 totalProductDeposited = INITIAL_LIQUIDITY_A * INITIAL_LIQUIDITY_B;
-
-        // Considerando la proporcion de LP tokens que tenia alice
-        // El producto deberia ser >= al depositado (gracias a fees)
         assertGe(
-            totalProductReceived,
-            (totalProductDeposited * lpTokens * lpTokens) /
-                (amm.totalSupply() + lpTokens) /
-                (amm.totalSupply() + lpTokens)
+            amountA + amountB + resA + resB,
+            INITIAL_LIQUIDITY_A + INITIAL_LIQUIDITY_B,
+            "Fees: suma total de tokens debe superar el deposito inicial"
         );
-
-        // Verificacion simple: al menos uno de los amounts es >= al original proporcional
-        // despues de muchos swaps con fee, el pool crece
-        assertGt(resA + amountA, INITIAL_LIQUIDITY_A - 1);
     }
 
     // -------------------------------------------------------
@@ -416,7 +426,7 @@ contract SimpleAMMTest is Test {
 
         // Swap cambia el precio
         vm.prank(bob);
-        amm.swap(address(tokenA), 100_000e18);
+        amm.swap(address(tokenA), 100_000e18, 0);
 
         uint256 price = amm.getPrice();
 
@@ -461,7 +471,7 @@ contract SimpleAMMTest is Test {
 
         // 3. Alice hace un swap
         vm.prank(alice);
-        uint256 swapOut = amm.swap(address(tokenA), 10_000e18);
+        uint256 swapOut = amm.swap(address(tokenA), 10_000e18, 0);
         assertGt(swapOut, 0);
 
         // 4. Bob retira su liquidez

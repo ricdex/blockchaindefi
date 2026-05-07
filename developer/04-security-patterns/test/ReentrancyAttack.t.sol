@@ -60,9 +60,9 @@ contract ReentrancyAttackTest is Test {
         victim2 = makeAddr("victim2");
         attackerEOA = makeAddr("attacker");
 
-        // Fondear cuentas
-        vm.deal(victim1, VICTIM_DEPOSIT);
-        vm.deal(victim2, VICTIM_DEPOSIT);
+        // Cada victim deposita en DOS vaults (vulnerable + secure), por eso 2x
+        vm.deal(victim1, 2 * VICTIM_DEPOSIT);
+        vm.deal(victim2, 2 * VICTIM_DEPOSIT);
         vm.deal(attackerEOA, ATTACKER_DEPOSIT);
 
         // Deploy vaults
@@ -122,9 +122,11 @@ contract ReentrancyAttackTest is Test {
         attacker.attack{value: ATTACKER_DEPOSIT}();
         vm.stopPrank();
 
-        // Las victimas ya no pueden retirar sus fondos
+        // El ataque no zerifica el balance mapping de las victimas (solo drena el ETH del vault).
+        // Por eso victim1 pasa el check "No balance", pero la transferencia falla porque
+        // el vault ya no tiene ETH.
         vm.prank(victim1);
-        vm.expectRevert("No balance");
+        vm.expectRevert("Transfer failed");
         vulnerableVault.withdraw();
     }
 
