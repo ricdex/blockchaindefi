@@ -56,6 +56,24 @@ Funciones clave: deposit, mint, withdraw, redeem, convertToShares, convertToAsse
 Patron: deposit(assets) -> shares | redeem(shares) -> assets
 ```
 
+**ERC-7540** — Async Vault Standard
+Extiende ERC-4626 para casos donde el deposito o retiro no puede completarse en una sola transaccion. Introduce un flujo asincrono de tres pasos y el concepto de "operator" para delegar la gestion de solicitudes. Disenado para activos del mundo real (RWA) y protocolos con settlement diferido.
+
+```
+Flujo de deposito asincrono:
+  1. requestDeposit(assets, receiver, owner)   → crea solicitud pendiente
+  2. fulfillDeposit(...)                        → el vault acepta y fija el precio
+  3. claim() / deposit(0, receiver)            → el usuario recibe sus shares
+
+Flujo de retiro asincrono (identico, invertido):
+  1. requestRedeem(shares, receiver, owner)
+  2. fulfillRedeem(...)
+  3. claim() / redeem(0, receiver)
+
+Rol de Operator:
+  setOperator(operator, approved)              → delegar gestion de solicitudes
+```
+
 **ERC-5192** — Minimal Soulbound NFTs
 Extension minimal de ERC-721 para tokens no-transferibles (Soulbound Tokens). Agrega una funcion `locked()` que retorna si un token esta bloqueado para transferencia.
 
@@ -193,6 +211,7 @@ Estado: Review (2025)
 | ERC-2612 | Permit | Tokens fungibles | Final | Approvals gasless con firma |
 | ERC-4337 | Account Abstraction | Identidad/Cuentas | Draft | Smart contract wallets, UX |
 | ERC-4626 | Tokenized Vault | Extensiones | Final | Vaults DeFi estandarizados |
+| ERC-7540 | Async Vault | Extensiones | Draft | Vaults asincronicos para RWA |
 | ERC-5169 | Client Script URI | Extensiones | Draft | Scripts del lado cliente |
 | ERC-5192 | Minimal Soulbound | Extensiones | Final | NFTs no-transferibles |
 | ERC-8004 | Trustless Agents | AI Agents | Review | Agentes IA registrados on-chain |
@@ -207,7 +226,10 @@ COMPOSABILIDAD DE ERCs:
   ERC-20 ──────────────> ERC-2612 (permit)
      |                      |
      v                      v
-  ERC-4626 (vaults) ──> Protocolos DeFi (Aave, Yearn, etc.)
+  ERC-4626 (vaults) ──> ERC-7540 (async vaults / RWA)
+     |                      |
+     v                      v
+  Protocolos DeFi (Aave, Yearn, etc.)
 
 
   ERC-721 ──────────────> ERC-5192 (soulbound)

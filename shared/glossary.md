@@ -69,8 +69,14 @@ Organizacion gobernada por smart contracts y votacion on-chain de holders de tok
 **Data Availability**
 Garantia de que los datos de las transacciones estan accesibles para que cualquier nodo pueda verificar la validez del estado. Critico en soluciones L2 y rollups.
 
+**Deposit Cap**
+Limite maximo de activos que un vault puede aceptar, implementado sobreescribiendo `maxDeposit` y `maxMint` en ERC-4626. Permite controlar el riesgo total del protocolo (TVL) y es comun en contextos institucionales donde el vault no puede escalar infinitamente por restricciones de la estrategia subyacente.
+
 **DID (Decentralized Identifier)**
 Identificador digital descentralizado que permite a una entidad tener una identidad verificable sin depender de una autoridad central. Estandar W3C.
+
+**Donation Attack**
+Ataque a vaults ERC-4626 donde el atacante transfiere tokens directamente al contrato (sin usar `deposit`) para alterar el ratio assets/shares. Un usuario que deposita despues puede ver sus shares redondeadas a 0 si el ratio es suficientemente alto. Es una variante del Inflation Attack. Se mitiga con Virtual Shares (`_decimalsOffset`).
 
 ---
 
@@ -97,6 +103,9 @@ Estandar para registrar, evaluar y validar agentes de IA on-chain. Define tres r
 **ERC-4626**
 Estandar para vaults tokenizados. Define una interfaz comun para depositar activos, obtener shares, y retirar, facilitando composabilidad entre protocolos DeFi.
 
+**ERC-7540**
+Estandar para vaults asincronicos (async vaults). Extiende ERC-4626 con un flujo de tres pasos: `requestDeposit → fulfillDeposit → claim`. Disenado para activos del mundo real (RWA) donde el settlement no es instantaneo (por ejemplo, un bono que tarda dias en liquidar). Define el rol de "operator" para delegar la gestion de solicitudes. La clave de diseño es que el precio se fija en el momento del `fulfill`, no al momento del `request`.
+
 **EVM (Ethereum Virtual Machine)**
 Maquina virtual que ejecuta el bytecode de los smart contracts. Es determinista, stack-based, y define el entorno de ejecucion de Ethereum y cadenas compatibles.
 
@@ -122,12 +131,18 @@ Prestamo sin colateral que debe ser tomado y devuelto (con fee) dentro de la mis
 **Front-running**
 Ataque en el que un actor observa una transaccion pendiente en el mempool y coloca su propia transaccion antes (con mas gas) para obtener ventaja economica.
 
+**Fuzz Test**
+Tipo de test en Foundry donde los inputs son generados aleatoriamente por el fuzzer para descubrir edge cases. Se escribe prefijando el nombre del test con `testFuzz_` y declarando parametros de tipo uint256, address, etc. Foundry genera cientos de combinaciones y reporta el contraejemplo minimo si alguna falla. Ejemplo: `function testFuzz_deposit(uint256 amount) public { ... }`.
+
 ---
 
 ## G
 
 **Gas**
 Unidad de medida del costo computacional de ejecutar operaciones en la EVM. Cada opcode tiene un costo en gas. El usuario paga gas price * gas used en ETH.
+
+**Gas Snapshot**
+Registro de los costos de gas de las funciones de un contrato generado con `forge snapshot`. Crea un archivo `.gas-snapshot` que permite comparar si un cambio en el codigo aumenta o disminuye el gas consumido. Util para detectar regresiones de gas en CI.
 
 **Governor**
 Contrato de gobernanza (tipicamente basado en OpenZeppelin Governor) que gestiona propuestas, votaciones y ejecucion de acciones aprobadas por una DAO.
@@ -152,8 +167,14 @@ Protocolo de consenso BFT para redes Ethereum permisionadas. Requiere 2/3+1 de l
 **Impermanent Loss**
 Perdida temporal que sufre un proveedor de liquidez en un AMM cuando el precio relativo de los tokens en el pool cambia respecto al momento del deposito. Se vuelve permanente solo al retirar.
 
+**Inflation Attack**
+Ataque a vaults ERC-4626 donde el primer depositor acuna 1 wei de shares y luego dona activos directamente al contrato para inflar el precio por share a un valor enorme. Los depositos posteriores de victimas se redondean a 0 shares, perdiendo todos sus activos. Se mitiga con Virtual Shares (`_decimalsOffset`) o con un deposito minimo inicial al desplegar.
+
 **Invariant**
 Condicion que debe mantenerse verdadera en todo momento dentro de un protocolo. Ejemplo: en un AMM de producto constante, x * y = k es el invariante principal.
+
+**Invariant Test (Stateful Fuzzing)**
+Tipo de test avanzado en Foundry donde el fuzzer ejecuta secuencias aleatorias de llamadas a un contrato y verifica al final de cada secuencia que ciertas propiedades (invariantes) se mantienen. Se declaran con el prefijo `invariant_`. Ejemplo: "el total de activos en el vault siempre es mayor o igual a la suma de shares redimibles". Foundry ejecuta N secuencias de M pasos cada una (configurables con `depth` y `runs`).
 
 ---
 
@@ -205,6 +226,9 @@ Numero secuencial asociado a cada cuenta que se incrementa con cada transaccion 
 
 ## O
 
+**Operator (ERC-7540)**
+Cuenta autorizada por el propietario de los activos para gestionar solicitudes de deposito o retiro en su nombre dentro de un vault ERC-7540. Similar al par `approve`/`transferFrom` de ERC-20 pero aplicado al ciclo de vida asincrono del vault. Permite que un bot o contrato externo gestione operaciones sin que el usuario deba estar presente en cada paso.
+
 **Oracle**
 Servicio que proporciona datos externos (precios, clima, resultados) a smart contracts. Como los contratos no pueden acceder a internet, los oracles actuan como puente. Ejemplo: Chainlink.
 
@@ -240,6 +264,9 @@ Numero minimo de votos (o porcentaje del supply de gobernanza) requerido para qu
 
 **Reentrancy**
 Vulnerabilidad en la que un contrato externo llama de vuelta al contrato victima antes de que este termine de actualizar su estado. El patron checks-effects-interactions y el `ReentrancyGuard` de OpenZeppelin lo previenen.
+
+**Rounding Direction (Vault)**
+En vaults ERC-4626, las conversiones entre shares y assets tienen ambiguedad al redondear numeros enteros. El estandar especifica que las operaciones deben redondear a favor del vault (no del usuario) para evitar que micro-transacciones extraigan valor. Concretamente: `previewWithdraw` y `previewMint` redondean hacia arriba (el usuario paga mas), mientras que `previewRedeem` y `previewDeposit` redondean hacia abajo (el usuario recibe menos). Violar esta regla abre vectores de extraccion de valor.
 
 **Rollup**
 Solucion L2 que ejecuta transacciones off-chain y publica datos comprimidos o pruebas en L1. Optimistic rollups usan pruebas de fraude; ZK rollups usan pruebas de validez (zero-knowledge proofs).
@@ -287,7 +314,10 @@ Precio promedio ponderado por tiempo. Usado como oracle resistente a manipulacio
 ## V
 
 **Vault**
-Contrato que acepta depositos de un activo y ejecuta una estrategia para generar rendimiento. ERC-4626 estandariza la interfaz de vaults tokenizados.
+Contrato que acepta depositos de un activo y ejecuta una estrategia para generar rendimiento. ERC-4626 estandariza la interfaz de vaults tokenizados. Para casos asincronos (activos reales, settlement diferido), ERC-7540 extiende ERC-4626 con un flujo request → fulfill → claim.
+
+**Virtual Shares (decimalsOffset)**
+Mecanismo de mitigacion del Inflation Attack en ERC-4626. Simula que el vault comenzo con un numero grande de shares y activos virtuales (10^offset), haciendo que el ratio inicial de shares/assets no sea 1:1 sino 1:10^offset. Esto hace que inflar el precio a un nivel peligroso sea economicamente prohibitivo para el atacante. OpenZeppelin ERC4626 expone `_decimalsOffset()` para configurarlo. Un offset de 3 agrega 1000 shares virtuales por asset virtual.
 
 **ve-Token (Vote-Escrowed Token)**
 Modelo de gobernanza (popularizado por Curve) en el que los usuarios bloquean tokens por un periodo para obtener poder de voto y rewards. Mas tiempo bloqueado = mas peso.

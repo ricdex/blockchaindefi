@@ -183,6 +183,165 @@ cast logs --from-block 18000000 --to-block latest \
 
 ---
 
+## Fuzz Testing con Foundry
+
+El fuzzer de Foundry genera inputs aleatorios automaticamente para descubrir edge cases que tests manuales no cubren. Es nativo: no requiere plugins.
+
+### Fuzz tests basicos
+
+```solidity
+// test/VaultFuzz.t.sol
+contract VaultFuzzTest is Test {
+    YieldVault vault;
+
+    function setUp() public {
+        vault = new YieldVault(address(token), "Vault", "vTKN");
+    }
+
+    // Foundry genera valores aleatorios para `amount` en cada corrida
+    function testFuzz_deposit(uint256 amount) public {
+        // Restringir el rango de inputs validos
+        amount = bound(amount, 1, vault.maxDeposit(address(this)));
+
+        token.approve(address(vault), amount);
+        uint256 shares = vault.deposit(amount, address(this));
+
+        // Invariante: siempre debe recibir shares > 0
+        assertGt(shares, 0);
+    }
+}
+```
+
+### Parametros del fuzzer
+
+En `foundry.toml`:
+
+```toml
+[fuzz]
+runs = 256        # Numero de inputs aleatorios por test (default: 256)
+seed = 0x42      # Semilla para reproducibilidad (opcional)
+```
+
+```bash
+# Ejecutar solo fuzz tests
+forge test --match-test testFuzz
+
+# Ver que inputs fallaron (shrinking automatico al minimo que reproduce el fallo)
+forge test --match-test testFuzz -vvv
+```
+
+### `bound()` vs `vm.assume()`
+
+| Tecnica | Cuando usar |
+|---------|------------|
+| `bound(value, min, max)` | Restringir un numero a un rango valido. Preferable: no descarta runs. |
+| `vm.assume(condition)` | Descartar runs que no cumplen una condicion. Usar con moderacion: demasiados `assume` desperdician runs. |
+
+```solidity
+// Preferible: bound() recalcula, no descarta
+amount = bound(amount, 1, 1e18);
+
+// Aceptable para condiciones booleanas simples
+vm.assume(recipient != address(0));
+vm.assume(recipient != address(vault));
+```
+
+---
+
+## Invariant Testing (Stateful Fuzzing) con Foundry
+
+Los invariant tests verifican propiedades que deben mantenerse verdaderas despues de cualquier secuencia de acciones. El fuzzer ejecuta N secuencias de M llamadas aleatorias al contrato y verifica los invariantes al final de cada secuencia.
+
+Son mas potentes que los fuzz tests normales porque descubren problemas que solo aparecen despues de multiples interacciones.
+
+### Estructura de un invariant test
+
+```solidity
+// test/invariants/VaultInvariant.t.sol
+import {StdInvariant} from "forge-std/StdInvariant.sol";
+
+contract VaultInvariant is StdInvariant, Test {
+    YieldVault vault;
+    VaultHandler handler;
+
+    function setUp() public {
+        vault = new YieldVault(...);
+        // El handler encapsula las llamadas validas al vault
+        handler = new VaultHandler(vault);
+        // Decirle a Foundry que llame funciones del handler
+        targetContract(address(handler));
+    }
+
+    // Invariante 1: el vault nunca debe ser insolvente
+    function invariant_vaultSolvent() public view {
+        assertGe(
+            token.balanceOf(address(vault)),
+            vault.totalAssets(),
+            "vault insolvent"
+        );
+    }
+
+    // Invariante 2: el precio por share nunca debe bajar (en ausencia de perdidas)
+    function invariant_priceMonotonic() public view {
+        assertGe(vault.convertToAssets(1e18), handler.initialPrice());
+    }
+}
+```
+
+### El rol del Handler
+
+```solidity
+// El handler es un contrato auxiliar que envuelve las acciones validas
+contract VaultHandler is Test {
+    YieldVault vault;
+    uint256 public initialPrice;
+
+    constructor(YieldVault _vault) {
+        vault = _vault;
+        initialPrice = _vault.convertToAssets(1e18);
+    }
+
+    function deposit(uint256 assets) external {
+        assets = bound(assets, 1, 1e24);
+        token.mint(address(this), assets);
+        token.approve(address(vault), assets);
+        vault.deposit(assets, address(this));
+    }
+
+    function redeem(uint256 shares) external {
+        shares = bound(shares, 0, vault.balanceOf(address(this)));
+        vault.redeem(shares, address(this), address(this));
+    }
+}
+```
+
+### Parametros de invariant testing
+
+En `foundry.toml`:
+
+```toml
+[invariant]
+runs  = 256    # Numero de secuencias aleatorias (default: 256)
+depth = 50     # Llamadas por secuencia (default: 15; aumentar para casos complejos)
+```
+
+```bash
+# Ejecutar invariant tests
+forge test --match-contract Invariant
+
+# Ver secuencia exacta que rompio el invariante
+forge test --match-contract Invariant -vvvv
+```
+
+### Fuzz vs Invariant: cuando usar cada uno
+
+| Tipo | Que verifica | Cuando usarlo |
+|------|-------------|---------------|
+| Fuzz test | Una funcion con inputs aleatorios | Validar una sola operacion (deposit, swap) |
+| Invariant test | Propiedades despues de secuencias | Solvencia, monotonia de precio, conservacion de tokens |
+
+---
+
 ## Anvil - Nodo local
 
 Anvil es el nodo local de Foundry. Levanta una instancia de Ethereum en memoria, ideal para desarrollo y testing.
@@ -545,17 +704,35 @@ En `.vscode/settings.json`:
 
 ---
 
+## forge snapshot - Gas tracking
+
+```bash
+# Generar snapshot de gas de todos los tests
+forge snapshot
+
+# Comparar con el snapshot anterior (detecta regresiones de gas)
+forge snapshot --diff
+
+# Ver el costo de gas de tests especificos
+forge snapshot --match-test testDeposit
+```
+
+Crea un archivo `.gas-snapshot` en la raiz del proyecto. Util en CI para detectar si un cambio aumento inesperadamente el costo de una funcion critica.
+
+---
+
 ## Resumen de flujo de trabajo
 
 ```
 1. forge init my-project          # Crear proyecto
 2. Escribir contratos en src/     # Desarrollar
-3. Escribir tests en test/        # Testear
+3. Escribir tests en test/        # Testear (unit + fuzz + invariant)
 4. forge test -vvvv               # Ejecutar tests
-5. forge coverage                 # Verificar cobertura
-6. slither .                      # Analisis estatico
-7. myth analyze src/Contract.sol  # Ejecucion simbolica (contratos criticos)
-8. forge script --broadcast       # Desplegar
+5. forge coverage                 # Verificar cobertura (>= 80%)
+6. forge snapshot                 # Snapshot de gas (detectar regresiones)
+7. slither .                      # Analisis estatico
+8. myth analyze src/Contract.sol  # Ejecucion simbolica (contratos criticos)
+9. forge script --broadcast       # Desplegar
 ```
 
 ---
