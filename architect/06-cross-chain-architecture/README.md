@@ -69,7 +69,9 @@ El ecosistema blockchain es inherentemente fragmentado. Cada cadena es un sistem
 
 #### 2.1 Lock-and-Mint
 
-El patron mas comun. Un activo se bloquea en la cadena origen y se acuna una version "wrapped" en la cadena destino.
+El patron mas comun. Un activo se bloquea en la cadena origen y se acuna una **representacion** en la cadena destino.
+
+> **Recordatorio clave**: nada "viaja". Los 100 ETH nunca salen de Chain A, porque ninguna otra cadena puede escribir en su estado. Lo que existe en Chain B es una representacion, que vale lo que valga la garantia de que el lock en A es real y sigue ahi.
 
 ```
    LOCK-AND-MINT PATTERN
@@ -96,12 +98,25 @@ El patron mas comun. Un activo se bloquea en la cadena origen y se acuna una ver
    quedan sin respaldo --> colapso de valor.
 ```
 
+**Que se acuna en destino depende de la cadena destino**, y este matiz se confunde mucho:
+
+| Destino | Que recibe el usuario por su ETH bloqueado | Por que |
+|---------|--------------------------------------------|---------|
+| Arbitrum, Base, Optimism (L2 cuyo activo nativo es ETH) | **ETH nativo** de la L2 (paga gas, no es un ERC-20) | La L2 eligio ETH como su activo nativo y lo respalda con la boveda de L1 |
+| BNB Chain, Avalanche, Solana (activo nativo distinto) | Un **token** que representa ETH (ej: "Binance-Peg ETH", "Wormhole ETH") | El balance nativo de esa cadena ya es BNB, AVAX o SOL, asi que el ETH solo puede existir como token |
+
+El diagrama de arriba (100 ETH → 100 wETH) corresponde al segundo caso. En el bridge canonico de Arbitrum, el mismo deposito termina como ETH nativo (ver [developer/05, seccion 5.1](../../developer/05-oracles-and-bridges/)).
+
 **Ventajas**: Simple de implementar, funciona entre cualquier par de cadenas.
-**Desventajas**: Activos wrapped (no nativos), riesgo concentrado en el contrato de custodia, fragmentacion de tokens wrapped.
+**Desventajas**: Activos bridged (una representacion, no el activo original), riesgo concentrado en el contrato de custodia y fragmentacion: cada bridge crea su propia version del mismo activo (por ejemplo, en Arbitrum conviven USDC.e bridged y USDC nativo).
+
+> **Wrapped ≠ bridged.** WETH en Ethereum es *wrapped*: la misma cadena, un contrato que custodia ETH y emite un ERC-20 1:1, sin confiar en nadie. Un token *bridged* siempre implica dos cadenas y confiar en el mecanismo que verifica el lock. En la practica se usa "wrapped" para ambos casos; conviene saber a cual se refiere cada uno.
 
 #### 2.2 Burn-and-Mint
 
-Usado por bridges nativos o canonicos. El activo se destruye en origen y se crea en destino. No hay custodia intermedia.
+Usado cuando **el emisor del token** controla la emision en todas las cadenas (por ejemplo, Circle con USDC). El activo se destruye en origen y se crea en destino. No hay custodia intermedia.
+
+> No confundir con el bridge canonico de un rollup: el de Arbitrum es **lock-and-mint** (el ETH o el ERC-20 quedan bloqueados en L1). Lo que lo hace especial no es el patron, sino **quien verifica**: el propio Ethereum (ver "Canonical Bridge vs Third-Party Bridge").
 
 ```
    BURN-AND-MINT PATTERN
@@ -713,8 +728,30 @@ Los bridges son los componentes de mayor riesgo en todo el ecosistema blockchain
 
 ### Canonical Bridge vs Third-Party Bridge
 
-- **Canonical** (ej: Arbitrum Bridge): Maximo seguridad (hereda L1), pero lento (7 dias para withdrawal)
+- **Canonical** (ej: Arbitrum Bridge): Maxima seguridad (hereda L1), pero lento (~6.4 dias para withdrawal en Arbitrum One)
 - **Third-party** (ej: Stargate, Across): Rapido, pero introduce nuevas trust assumptions
+
+Por que el bridge canonico de un rollup es cualitativamente distinto de un bridge entre dos cadenas independientes:
+
+```
+  BRIDGE CANONICO DE UN ROLLUP                  BRIDGE ENTRE CADENAS INDEPENDIENTES
+  (Ethereum <-> Arbitrum)                       (Ethereum <-> BNB Chain)
+
+  Ethereum L1                                   Ethereum                BNB Chain
+  ┌─────────────────────────────┐               ┌──────────┐            ┌──────────┐
+  │ Bridge (boveda)             │               │ Boveda   │            │ Token    │
+  │ Rollup contract ────────────┼─ conoce el    │          │            │ bridged  │
+  │  (estado de L2 disputable   │  estado de L2 └────▲─────┘            └────▲─────┘
+  │   en el propio L1)          │                    │                       │
+  └─────────────────────────────┘                    └──── Validadores ──────┘
+                                                      externos (N de M firmas):
+  Quien verifica: el propio Ethereum.                  NI Ethereum NI BNB verifican
+  Supuesto: 1 participante honesto + L1.               lo que firman.
+                                                      Supuesto: la mayoria de los
+                                                      firmantes es honesta.
+```
+
+Ethereum puede verificar a Arbitrum porque Arbitrum **le publica sus datos y le somete su estado**. Con BNB Chain no ocurre ninguna de las dos cosas, y por eso hace falta un tercero que "cuente" a Ethereum lo que paso en BNB (y viceversa). Ese tercero es exactamente lo que fallo en Ronin y en Harmony.
 
 ---
 
@@ -751,6 +788,9 @@ Los bridges son los componentes de mayor riesgo en todo el ecosistema blockchain
 Antes de avanzar al siguiente modulo, verifica que puedes:
 
 - [ ] Explicar los 4 patrones de bridge (lock-and-mint, burn-and-mint, liquidity pools, atomic swaps) con sus trade-offs
+- [ ] Explicar por que un deposito de ETH en Arbitrum llega como ETH nativo, pero en BNB Chain llega como token
+- [ ] Distinguir wrapped (WETH, misma cadena) de bridged (USDC.e, dos cadenas)
+- [ ] Explicar por que el bridge canonico de un rollup no necesita validadores externos y un bridge Ethereum ↔ BNB Chain si
 - [ ] Comparar los mecanismos de verificacion (multisig, optimistic, ZK, light client) y saber cuando usar cada uno
 - [ ] Describir la arquitectura de al menos 3 messaging protocols (IBC, LayerZero, Axelar, Wormhole, Hyperlane)
 - [ ] Analizar un bridge hack y explicar la root cause y las lecciones

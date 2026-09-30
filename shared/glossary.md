@@ -21,6 +21,9 @@ Protocolo que permite intercambiar tokens sin order book, usando pools de liquid
 **Agent Registration File**
 Archivo JSON que describe a un agente registrado en ERC-8004. Incluye campos obligatorios (name, description, image, services) y opcionales (registrations, supportedTrust, active). El URI del agente en el Identity Registry apunta a este archivo.
 
+**Assertion (Arbitrum)**
+Afirmacion que un validador de Arbitrum publica en el contrato `Rollup` de Ethereum: "despues de ejecutar los batches hasta N, el estado de L2 es S". Queda abierta durante el challenge period (~6.4 dias en Arbitrum One). Si nadie la disputa con exito, L1 la acepta como definitiva y los retiros basados en ella se pueden ejecutar.
+
 **Atomic Swap**
 Intercambio de tokens entre dos partes sin intermediario, garantizado por smart contracts. Si una parte no cumple, la transaccion completa se revierte.
 
@@ -31,11 +34,20 @@ Intercambio de tokens entre dos partes sin intermediario, garantizado por smart 
 **Besu (Hyperledger Besu)**
 Cliente Ethereum open-source desarrollado bajo Hyperledger (Linux Foundation). Soporta redes publicas y privadas, con consenso modular (IBFT 2.0, QBFT, Clique) y transacciones privadas via Tessera. Ideal para redes enterprise y consorcio.
 
+**Batch (rollup)**
+Paquete de muchas transacciones de L2, comprimidas, que el sequencer publica en L1 (en Arbitrum, en el contrato `SequencerInbox`). Es la forma en que un rollup cumple con la disponibilidad de datos: con los batches, cualquiera puede re-ejecutar la L2 y reconstruir su estado.
+
+**Blob (EIP-4844)**
+Espacio de datos barato y temporal (~18 dias) que las transacciones de tipo 3 adjuntan a un bloque de Ethereum. Los rollups publican alli sus batches. La EVM no puede leer el contenido del blob; en L1 queda para siempre solo su compromiso criptografico (`blobVersionedHash`).
+
 **Block**
 Unidad de datos que contiene un conjunto de transacciones, un hash del bloque anterior, timestamp y otros metadatos. Los bloques forman la cadena (blockchain).
 
 **Bridge**
-Protocolo que permite transferir activos o mensajes entre dos blockchains diferentes. Ejemplos: Wormhole, LayerZero, Axelar.
+Protocolo que conecta dos blockchains diferentes. Un activo nunca "viaja": el bridge lo bloquea (o quema) en una red y acredita (o emite) una representacion en la otra, asegurando que ambas cosas se correspondan. Su riesgo depende de quien verifica lo que paso en la red de origen. Ejemplos: Arbitrum Bridge (canonico), Wormhole, LayerZero, Axelar.
+
+**Bridged Token**
+Token en una red B que representa un activo bloqueado en una red A. Vale lo que valga la garantia del bridge: si el bridge es hackeado, la representacion queda sin respaldo. Ejemplo: USDC.e en Arbitrum (respaldado por USDC bloqueado en Ethereum), a diferencia del USDC de emision nativa que Circle acuna directamente en Arbitrum. No confundir con wrapped token.
 
 **Bytecode**
 Codigo compilado de un smart contract que se ejecuta en la EVM. Es el resultado de compilar Solidity (u otro lenguaje) y es lo que realmente se despliega en la blockchain.
@@ -43,6 +55,12 @@ Codigo compilado de un smart contract que se ejecuta en la EVM. Es el resultado 
 ---
 
 ## C
+
+**Canonical Bridge**
+Bridge "oficial" de una L2, formado por contratos en L1 que la propia L2 esta obligada a respetar. En un rollup, lo verifica el mismo Ethereum (datos publicados en L1 y estado disputable en L1), sin validadores externos. Ejemplo: el bridge de Arbitrum (contratos `Inbox`, `Bridge` y `Outbox` en Ethereum).
+
+**Chain ID**
+Numero que identifica a una red EVM (1 = Ethereum Mainnet, 42161 = Arbitrum One, 421614 = Arbitrum Sepolia, 31337 = Anvil). Se incluye en cada firma (EIP-155), asi que una transaccion firmada para una red no es valida en otra. La wallet usa el chain ID, y no el nombre ni el simbolo, para saber a que red habla.
 
 **Consortium Network**
 Red blockchain operada por un grupo predefinido de organizaciones que comparten la validacion. A diferencia de una red publica (abierta a todos) o privada (una sola entidad), el consorcio distribuye el control entre multiples participantes conocidos. Ejemplos: redes Besu con IBFT 2.0.
@@ -107,7 +125,10 @@ Estandar para vaults tokenizados. Define una interfaz comun para depositar activ
 Estandar para vaults asincronicos (async vaults). Extiende ERC-4626 con un flujo de tres pasos: `requestDeposit → fulfillDeposit → claim`. Disenado para activos del mundo real (RWA) donde el settlement no es instantaneo (por ejemplo, un bono que tarda dias en liquidar). Define el rol de "operator" para delegar la gestion de solicitudes. La clave de diseño es que el precio se fija en el momento del `fulfill`, no al momento del `request`.
 
 **EVM (Ethereum Virtual Machine)**
-Maquina virtual que ejecuta el bytecode de los smart contracts. Es determinista, stack-based, y define el entorno de ejecucion de Ethereum y cadenas compatibles.
+Maquina virtual que ejecuta el bytecode de los smart contracts. Es determinista, stack-based, y define el entorno de ejecucion de Ethereum y cadenas compatibles. Es una *especificacion*, no una red: Ethereum, Arbitrum, BNB Chain y Anvil ejecutan la misma EVM, pero cada una tiene su propio estado y su propio activo nativo.
+
+**EVM-compatible**
+Red que ejecuta la EVM (mismo bytecode, mismas direcciones, mismas herramientas). No implica usar ETH como gas (BNB Chain usa BNB, Polygon PoS usa POL) ni ser una L2 (BNB Chain es una cadena independiente). Describe la experiencia del desarrollador, no el modelo de seguridad.
 
 ---
 
@@ -187,8 +208,11 @@ Bot o servicio off-chain que ejecuta acciones on-chain cuando se cumplen ciertas
 
 ## L
 
+**L1 (Layer 1)**
+Blockchain base que ofrece consenso, seguridad y disponibilidad de datos propios. Ethereum Mainnet es la L1 de Arbitrum, Base y Optimism.
+
 **L2 (Layer 2)**
-Solucion de escalabilidad construida sobre una blockchain base (L1) que procesa transacciones fuera de la cadena principal pero hereda sus garantias de seguridad. Ejemplos: Arbitrum, Optimism, zkSync.
+Red que ejecuta transacciones y mantiene su propio estado, pero delega en una L1 la parte que requiere confianza: publica alli sus datos (disponibilidad), guarda alli los fondos depositados (bridge canonico) y deja que la L1 decida que estado es valido (fraud o validity proofs). Resumen: "L2 ejecuta; L1 proporciona infraestructura de confianza". Ejemplos: Arbitrum, Optimism, zkSync. Una red EVM con su propio consenso (BNB Chain) no es una L2 aunque sea compatible.
 
 **Liquidation**
 Proceso en el que el colateral de un usuario es vendido automaticamente porque su posicion cayo por debajo del ratio minimo requerido. Protege al protocolo de deuda insolvente.
@@ -219,6 +243,12 @@ Patron de Solidity que permite agregar precondiciones a funciones (por ejemplo, 
 
 ## N
 
+**Native Asset (activo nativo)**
+Activo que lleva el propio protocolo de la red en el campo `balance` de cada cuenta, sin smart contract. ETH es el activo nativo de Ethereum y tambien de Arbitrum (en Arbitrum es otro registro, respaldado por ETH bloqueado en L1). Ojo: "USDC nativo" usa la palabra en otro sentido (token emitido directamente por su emisor en esa red, sin bridge), pero sigue siendo un ERC-20.
+
+**Native Gas Token**
+Activo nativo con el que se paga el gas en una red. Tiene que ser nativo porque el protocolo necesita cobrar antes de ejecutar cualquier contrato. Ejemplos: ETH (Ethereum, Arbitrum, Base), BNB (BNB Chain), POL (Polygon PoS), AVAX (Avalanche C-Chain).
+
 **Nonce**
 Numero secuencial asociado a cada cuenta que se incrementa con cada transaccion enviada. Previene replay attacks y determina el orden de las transacciones de una cuenta.
 
@@ -238,6 +268,9 @@ Ataque en el que un actor manipula el precio reportado por un oracle (especialme
 ---
 
 ## P
+
+**Precompile**
+Contrato "integrado" en el cliente de la red, en una direccion fija, que ejecuta codigo nativo en lugar de bytecode EVM. Ethereum tiene precompiles criptograficos (ej: `ecrecover` en `0x01`). Arbitrum agrega los suyos: `ArbSys` (`0x64`) para retiros y numero de bloque de L2, y `NodeInterface` (`0xC8`) para consultar batches. Solo existen en la red que los implementa.
 
 **Permissioned Network**
 Red blockchain donde la participacion (como validator, transactor o lector) requiere autorizacion explicita. Contrasta con redes permissionless como Ethereum mainnet. Permite controlar quien valida bloques y quien envia transacciones.
@@ -280,6 +313,12 @@ Tipo de MEV en el que un atacante coloca una transaccion antes (front-run) y otr
 
 **SBT (Soulbound Token)**
 Token no transferible vinculado a una wallet (propuesto por Vitalik Buterin). Usado para representar credenciales, reputacion o logros que no deben ser vendidos.
+
+**Sequencer**
+Componente de una L2 que recibe las transacciones, decide su orden y las ejecuta al instante (en Arbitrum, ~250 ms). Puede retrasar o censurar, pero no falsificar el estado. Contra la censura existe la inclusion forzada via L1. Tambien publica los batches en L1.
+
+**Settlement (asentamiento)**
+Punto en el que un resultado pasa a ser definitivo para el sistema que lo respalda. Una L2 "se asienta" en Ethereum cuando el contrato del rollup en L1 acepta su estado (tras el challenge period en un optimistic rollup, o tras verificar la prueba en un ZK rollup). Los retiros hacia L1 solo se liberan contra un estado asentado.
 
 **Sidechain**
 Blockchain independiente conectada a una cadena principal via un bridge. Tiene su propio mecanismo de consenso y seguridad, a diferencia de un L2 que hereda la seguridad de L1.
@@ -330,7 +369,7 @@ Credencial digital firmada criptograficamente que puede ser verificada sin conta
 ## W
 
 **Wrapped Token**
-Token que representa otro activo en una blockchain diferente o en un formato compatible. Ejemplo: WETH (Wrapped ETH) es una version ERC-20 de ETH nativo.
+ERC-20 que envuelve un activo **en la misma red**: un contrato custodia el activo y emite tokens 1:1, canjeables en cualquier momento. Ejemplo: WETH en Ethereum es ETH nativo guardado en el contrato WETH, expuesto como ERC-20 para que los DEX puedan usar `approve`/`transferFrom`. No requiere confiar en ningun bridge. En la practica "wrapped" tambien se usa para tokens bridged ("Wormhole wETH"); conviene preguntar si hay una o dos redes de por medio.
 
 ---
 

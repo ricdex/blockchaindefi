@@ -24,6 +24,7 @@ Al completar este módulo serás capaz de:
 - Nociones de redes distribuidas y tolerancia a fallas
 - Familiaridad con hexadecimal y aritmética binaria
 - Haber usado Ethereum como usuario (enviar transacciones, interactuar con contratos)
+- Tener claro el mapa "blockchain / EVM / red / activo nativo / token" ([developer/01, sección 0](../../developer/01-solidity-fundamentals/)). Este módulo profundiza en la parte de *una* red; el módulo 05 muestra qué pasa cuando una red (Arbitrum) delega parte de su confianza en otra (Ethereum)
 
 ---
 
@@ -266,6 +267,8 @@ Cada cuenta tiene un estado global:
   }
 ```
 
+- Este estado es **por red**: la misma dirección tiene un `Account` distinto en Ethereum, en Arbitrum y en Anvil (mismo formato, distintos valores)
+- El campo `balance` es el activo nativo de la red (ETH en Ethereum); los tokens ERC-20 no están aquí, sino en el `storageRoot` de cada contrato de token
 - Las transferencias modifican directamente el balance de las cuentas
 - Los contratos tienen su propio storage trie
 - Ventaja: fácil de razonar sobre saldo actual

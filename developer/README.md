@@ -46,11 +46,11 @@ Los modulos 01-04 forman el **core obligatorio**. A partir del modulo 05, los mo
 
 | # | Modulo | Que construyes | Esfuerzo estimado | Dificultad |
 |---|--------|----------------|-------------------|------------|
-| 01 | [Solidity Fundamentals](01-solidity-fundamentals/) | MultiSig Wallet, contratos con access control | ~12 horas | Basico |
-| 02 | [Tokens and Standards](02-tokens-and-standards/) | ERC-20, ERC-721, ERC-1155, ERC-4626 vault token | ~10 horas | Basico |
+| 01 | [Solidity Fundamentals](01-solidity-fundamentals/) | Mapa mental blockchain/EVM/red/ETH/token, MultiSig Wallet, tu direccion en varias redes | ~13 horas | Basico |
+| 02 | [Tokens and Standards](02-tokens-and-standards/) | Nativo vs ERC-20 vs wrapped vs bridged, ERC-20, ERC-721, ERC-1155, ERC-4626 vault token | ~10 horas | Basico |
 | 03 | [DeFi Primitives](03-defi-primitives/) | AMM simple, lending pool, flash loan receiver, vault | ~15 horas | Intermedio |
 | 04 | [Security Patterns](04-security-patterns/) | Exploits de reentrancy, contratos corregidos, analisis con Slither | ~15 horas | Intermedio |
-| 05 | [Oracles and Bridges](05-oracles-and-bridges/) | Integracion Chainlink, TWAP oracle, bridge mock | ~10 horas | Intermedio |
+| 05 | [Oracles and Bridges](05-oracles-and-bridges/) | Integracion Chainlink, collateral + liquidacion, laboratorio L1 → L2: bridge a Arbitrum, deploy con Remix y rastreo del batch en L1 | ~13 horas | Intermedio |
 | 06 | [Stablecoins](06-stablecoins/) | Stablecoin colateralizada, mecanismo CDP | ~12 horas | Intermedio-Alto |
 | 07 | [Governance and DAOs](07-governance-and-daos/) | Governor contract, timelock, sistema de votacion on-chain | ~10 horas | Intermedio |
 | 08 | [Identity, DID and SBT](08-identity-did-sbt/) | Soulbound Tokens, registro DID, Verifiable Credentials | ~10 horas | Intermedio |
@@ -59,7 +59,7 @@ Los modulos 01-04 forman el **core obligatorio**. A partir del modulo 05, los mo
 | 11 | [Private Networks](11-private-networks/) | Red Besu IBFT 2.0, deploy en red privada, FireFly multiparty | ~12 horas | Intermedio-Alto |
 | 12 | [AI Agents ERC-8004](12-ai-agents-erc8004/) | Identity, Reputation y Validation registries para AI agents | ~12 horas | Intermedio-Alto |
 
-**Total estimado: ~144 horas**
+**Total estimado: ~148 horas**
 
 ---
 
@@ -98,7 +98,7 @@ Cada modulo del developer path tiene un complemento en el architect path. Despue
 | 02-tokens-and-standards | [02-protocol-design](../architect/02-protocol-design/) - Diseno de protocolos e invariantes |
 | 03-defi-primitives | [03-tokenomics-models](../architect/03-tokenomics-models/) - Modelos economicos detras de AMMs y lending |
 | 04-security-patterns | [04-security-architecture](../architect/04-security-architecture/) - Vision sistemica de seguridad y threat modeling |
-| 05-oracles-and-bridges | [05-scalability](../architect/05-scalability/) + [06-cross-chain](../architect/06-cross-chain-architecture/) - L2, rollups e interoperabilidad |
+| 05-oracles-and-bridges | [05-scalability](../architect/05-scalability/) + [06-cross-chain](../architect/06-cross-chain-architecture/) - Por que Arbitrum es una L2 y no otra cadena EVM, rollups e interoperabilidad |
 | 06-stablecoins | [03-tokenomics-models](../architect/03-tokenomics-models/) - Mecanismos de peg y estabilidad |
 | 07-governance-and-daos | [09-system-design-cases](../architect/09-system-design-cases/) - Gobernanza como componente de sistema |
 | 08-identity-did-sbt | [07-identity-and-compliance](../architect/07-identity-and-compliance/) - Identidad, regulacion y privacy |

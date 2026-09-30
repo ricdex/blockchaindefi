@@ -575,6 +575,17 @@ IDE web para Solidity. No requiere instalacion.
 
 Abrir [https://remix.ethereum.org](https://remix.ethereum.org) en el navegador.
 
+### Desplegar en una red real con MetaMask
+
+En la pestaña **Deploy & Run Transactions**, el campo *Environment* decide **donde** se despliega:
+
+| Environment | Donde se despliega el contrato |
+|-------------|--------------------------------|
+| `Remix VM (...)` | En una EVM simulada dentro del navegador (como Anvil, pero se borra al recargar) |
+| `Injected Provider - MetaMask` | En **la red que tengas seleccionada en MetaMask** |
+
+Con *Injected Provider*, Remix muestra debajo el chain ID de la red, por ejemplo `Custom (421614) network` para Arbitrum Sepolia. **Revisa ese numero antes de cada deploy**: si cambias de red en MetaMask, cambia el destino del contrato. El contrato solo existira en esa red. Ejercicio completo en el [laboratorio de developer/05](../developer/05-oracles-and-bridges/).
+
 > Para desarrollo serio y testing, usar Foundry. Remix es util como herramienta complementaria de exploracion.
 
 ---
@@ -869,14 +880,15 @@ curl -X POST http://localhost:5000/api/v1/messages/private \
 
 ## Testnets y Faucets
 
-Para desplegar contratos en redes de prueba publicas (Sepolia, Holesky), necesitas testnet ETH gratuito.
+Para desplegar contratos en redes de prueba publicas (Sepolia, Hoodi, Arbitrum Sepolia), necesitas testnet ETH gratuito. Recuerda que cada red tiene su propio balance: el ETH de Arbitrum Sepolia se obtiene haciendo un bridge desde Sepolia.
 
 La guia completa esta en [shared/testnet-setup.md](testnet-setup.md). Resumen rapido:
 
 | Testnet | Chain ID | Faucet recomendado |
 |---------|----------|--------------------|
 | Sepolia | 11155111 | Google Cloud Faucet, Alchemy Faucet |
-| Holesky | 17000 | Holesky PoW Faucet |
+| Hoodi | 560048 | Faucets de Hoodi (ver guia) |
+| Arbitrum Sepolia (L2) | 421614 | Bridge desde Sepolia (bridge.arbitrum.io) |
 
 ```bash
 # Configurar en foundry.toml

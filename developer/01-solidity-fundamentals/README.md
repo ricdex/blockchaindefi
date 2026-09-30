@@ -4,6 +4,7 @@
 
 Al completar este modulo seras capaz de:
 
+- Distinguir blockchain, EVM, Ethereum, ETH y tokens ERC-20, y explicar por que la misma direccion tiene balances distintos en cada red
 - Entender el sistema de tipos de Solidity y como se almacenan en storage
 - Escribir contratos con funciones, modifiers, events y manejo de errores
 - Comprender las diferencias entre storage, memory y calldata
@@ -23,6 +24,107 @@ Al completar este modulo seras capaz de:
 ---
 
 ## Conceptos clave
+
+### 0. Mapa mental: blockchain, EVM, Ethereum, ETH y tokens
+
+Antes de escribir una linea de Solidity conviene separar cinco palabras que en el dia a dia se usan como sinonimos, pero que son cosas distintas. Casi todas las confusiones posteriores (L2, bridges, "por que no me llego el token") vienen de mezclarlas.
+
+| Palabra | Que es realmente | Analogia | Pregunta que responde |
+|---------|------------------|----------|-----------------------|
+| **Blockchain** | Un *tipo de sistema*: un libro contable replicado en muchos nodos que se ponen de acuerdo (consenso) sobre el orden de las transacciones | Una base de datos compartida que nadie controla solo | Como se ponen de acuerdo? |
+| **EVM** | Una *especificacion* de maquina virtual: como se ejecuta bytecode y como cambia el estado | x86 o la JVM: muchas maquinas distintas implementan la misma especificacion | Como se ejecuta el codigo? |
+| **Ethereum Mainnet** | Una *red concreta*: sus nodos, su consenso (PoS), su chain ID (`1`) y **su propio estado** | Una computadora concreta, con su propio disco | Donde vive el estado? |
+| **ETH** | El *activo nativo* de Ethereum: un numero en el campo `balance` de cada cuenta, que lleva el protocolo | El efectivo del sistema | Con que se paga el gas? |
+| **Token ERC-20** | Un *smart contract* que guarda un `mapping(address => uint256)` en su storage | Una planilla dentro de un programa | Quien lleva la cuenta de este activo? |
+
+La idea mas importante de la tabla: **la EVM es la especificacion, no la red**. Arbitrum, Base, BNB Chain, Polygon y Anvil ejecutan la misma EVM, pero cada una es otra "computadora" con **su propio disco** (su propio estado).
+
+#### Donde vive el ETH y donde vive un token
+
+```
+Estado global de UNA red (ej: Ethereum Mainnet, chain ID 1)
+┌──────────────────────────────────────────────────────────────────┐
+│ Cuenta 0xAlice (EOA)                                             │
+│   nonce:   7                                                     │
+│   balance: 2.5 ETH           <── ETH nativo: lo lleva el PROTOCOLO│
+│   code:    (vacio)                                               │
+│                                                                  │
+│ Cuenta 0xUSDC (contrato)                                         │
+│   balance: 0 ETH                                                 │
+│   code:    bytecode del ERC-20                                   │
+│   storage:                                                       │
+│     _balances[0xAlice] = 1000   <── token: lo lleva un CONTRATO  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Como se consulta cada uno:
+
+```bash
+# ETH de Alice: se le pregunta al protocolo (no hay contrato de por medio)
+cast balance 0xAlice
+
+# USDC de Alice: se le pregunta a UN contrato especifico
+cast call 0xUSDC "balanceOf(address)(uint256)" 0xAlice
+```
+
+MetaMask hace exactamente esto por ti: para el ETH llama a `eth_getBalance`, y para cada token llama a `balanceOf` en el contrato que tenga registrado.
+
+#### Por que ETH no necesita un smart contract
+
+- El protocolo define que **toda cuenta tiene un campo `balance`**. Enviar ETH es una transaccion con `value`: la EVM resta de un lado y suma del otro, sin ejecutar codigo (si el destino es una EOA).
+- El gas **tiene** que pagarse en el activo nativo. Piensalo como un huevo y la gallina: si el gas se pagara con un ERC-20, habria que ejecutar un contrato para cobrar... la ejecucion de contratos. El protocolo necesita un activo que pueda cobrar *antes* de ejecutar nada.
+- Consecuencia practica: ETH no tiene `approve` ni `transferFrom`. Por eso existe **WETH** (lo vemos en el modulo 02).
+
+#### "EVM-compatible" no significa "usa ETH"
+
+Cada red elige su activo nativo, que es el que paga el gas:
+
+| Red | Chain ID | Native gas token | Que es |
+|-----|----------|------------------|--------|
+| Ethereum Mainnet | 1 | ETH | L1 |
+| Sepolia | 11155111 | SepoliaETH (sin valor) | Testnet de Ethereum |
+| Arbitrum One | 42161 | ETH | L2 sobre Ethereum (modulo 05) |
+| Base | 8453 | ETH | L2 sobre Ethereum |
+| BNB Smart Chain | 56 | BNB | Blockchain independiente |
+| Polygon PoS | 137 | POL | Cadena propia con checkpoints en Ethereum |
+| Avalanche C-Chain | 43114 | AVAX | Blockchain independiente |
+| Gnosis Chain | 100 | xDAI | Blockchain independiente |
+| Anvil (local) | 31337 | "ETH" de juguete | Nodo en tu maquina |
+| Besu (modulo 11) | El que definas en el genesis | Existe, pero el gas cuesta 0 (`--min-gas-price=0`) | Red privada |
+
+Dos trampas frecuentes:
+
+1. **El simbolo es solo una etiqueta.** Cuando agregas una red en MetaMask, *tu* escribes el "currency symbol". Que Arbitrum muestre "ETH" no significa que sea el mismo registro que el ETH de Ethereum: es un numero en el estado **de Arbitrum** (en el modulo 05 veras que esta respaldado por ETH bloqueado en Ethereum).
+2. **Mismo codigo no significa misma red.** Un contrato desplegado en BNB Chain no sabe nada de Ethereum, aunque su bytecode sea identico.
+
+#### Una direccion, muchas redes
+
+Tu direccion se calcula **solo con matematica**, a partir de tu clave privada. En la formula no interviene ninguna red:
+
+```
+clave privada ──(secp256k1)──> clave publica ──(keccak256, ultimos 20 bytes)──> 0xf39F...2266
+```
+
+Por eso la misma direccion "existe" en todas las redes EVM a la vez. Lo que **no** se comparte es el estado: cada red tiene su propia fila para esa direccion.
+
+```
+                        0xf39F...2266   (misma direccion)
+          ┌──────────────────┼───────────────────┬───────────────────┐
+          ▼                  ▼                   ▼                   ▼
+   Ethereum (1)       Arbitrum One (42161)   Sepolia (11155111)   Anvil (31337)
+   balance: 0 ETH     balance: 0 ETH         balance: 0           balance: 10000 ETH
+   nonce:   miles     nonce:   miles         nonce:   miles       nonce:   0
+```
+
+Tres consecuencias que debes poder explicar:
+
+- **Balances distintos**: tener ETH en Ethereum no te da nada en Arbitrum. Para "llevarlo" hay que usar un bridge (modulo 05).
+- **Nonces distintos**: cada red cuenta tus transacciones por separado.
+- **Contratos distintos**: la direccion de un contrato se calcula con `keccak256(rlp(deployer, nonce))` usando el nonce **de esa red**. Un contrato existe solo en la red donde se desplego. Y en otra red, esa misma direccion puede estar vacia... o tener codigo de otra persona.
+
+> Las firmas incluyen el chain ID (EIP-155). Por eso una transaccion firmada para Arbitrum no puede "reenviarse" en Ethereum: la firma no es valida alli.
+
+En el **Paso 8** del ejercicio vas a comprobar todo esto con tus propios ojos.
 
 ### 1. Sistema de tipos
 
@@ -472,6 +574,10 @@ cast call $MULTISIG "getTransactionCount()(uint256)" --rpc-url $RPC
 > Este balance NO es una variable dentro del contrato — vive en el **state trie** de Ethereum,
 > una estructura de datos a nivel de protocolo que la EVM mantiene automaticamente.
 >
+> Ojo con el matiz: es el state trie **de esta red**. Anvil tiene el suyo, Ethereum Mainnet
+> tiene el suyo y Arbitrum tiene el suyo. Los 10000 ETH de la cuenta 0 existen solo
+> en el disco de tu Anvil (ver seccion 0 y Paso 8).
+>
 > ```
 > State trie de Ethereum:
 > ┌──────────────────────────────────┬──────────────┐
@@ -728,6 +834,114 @@ cast send $MULTISIG "submit(address,uint256,bytes)" \
 # REVERT: NotOwner(0x...)
 ```
 
+### Paso 8: Tu direccion en varias redes (sin gastar nada)
+
+Hasta ahora todo paso dentro de Anvil. En este paso vas a comprobar la seccion 0: **una direccion es la misma en todas las redes EVM, pero cada red tiene su propio estado**. No necesitas faucet ni fondos: solo vas a *leer*.
+
+#### 8.1 Con `cast`: la misma direccion en cuatro redes
+
+Deja Anvil corriendo (con tu MultiSig desplegada) y agrega RPCs publicos de solo lectura:
+
+```bash
+export ME=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266     # cuenta 0 de Anvil
+export ETH_RPC=https://ethereum-rpc.publicnode.com        # Ethereum Mainnet (L1)
+export ARB_RPC=https://arb1.arbitrum.io/rpc               # Arbitrum One (L2)
+export SEPOLIA_RPC=https://ethereum-sepolia-rpc.publicnode.com
+```
+
+**Pregunta 1: con que red estoy hablando?** El chain ID es la "identidad" de la red:
+
+```bash
+cast chain-id --rpc-url $RPC          # 31337    -> Anvil
+cast chain-id --rpc-url $ETH_RPC      # 1        -> Ethereum Mainnet
+cast chain-id --rpc-url $ARB_RPC      # 42161    -> Arbitrum One
+cast chain-id --rpc-url $SEPOLIA_RPC  # 11155111 -> Sepolia
+```
+
+**Pregunta 2: la misma direccion tiene el mismo estado?**
+
+```bash
+for R in $RPC $ETH_RPC $ARB_RPC $SEPOLIA_RPC; do
+  echo "chain $(cast chain-id --rpc-url $R) | balance $(cast balance $ME --ether --rpc-url $R) | nonce $(cast nonce $ME --rpc-url $R)"
+done
+```
+
+Salida aproximada (los numeros de las redes publicas cambian con el tiempo):
+
+```
+chain 31337    | balance 9994.99...   | nonce 7       <- tu Anvil: lo que hiciste en este modulo
+chain 1        | balance 0.0000...    | nonce 8288    <- Ethereum: miles de transacciones de otras personas
+chain 42161    | balance 0.0000...    | nonce 15697   <- Arbitrum: otra historia distinta
+chain 11155111 | balance 0.0000...    | nonce 47910   <- Sepolia: otra mas
+```
+
+Que esta pasando: la clave privada de la cuenta 0 de Anvil es **publica** (sale en la documentacion de Foundry). Miles de personas la usaron en redes reales, y cada red registro esa actividad **por separado**. Ademas hay bots que vacian al instante cualquier fondo que llegue a esa direccion.
+
+> **Nunca envies fondos reales a las cuentas de Anvil.** Se pierden en segundos.
+
+**Bonus: la misma direccion puede incluso tener codigo distinto en cada red**
+
+```bash
+cast code $ME --rpc-url $RPC       # 0x                     -> en tu Anvil es una EOA normal
+cast code $ME --rpc-url $ETH_RPC   # 0xef0100...            -> en Ethereum tiene codigo!
+```
+
+El prefijo `0xef0100` es una delegacion EIP-7702: alguien con la clave publica "le instalo" codigo a esa cuenta en Ethereum (normalmente un bot que la vacia). En tu Anvil no paso nada de eso. Es la misma direccion, pero cada red tiene su estado, **incluido el codigo**.
+
+**Pregunta 3: mi contrato existe en todas las redes?**
+
+```bash
+cast code $MULTISIG --rpc-url $RPC       # 0x6080604052...  -> bytecode: existe en Anvil
+cast code $MULTISIG --rpc-url $ETH_RPC   # 0x               -> vacio: NO existe en Ethereum
+cast code $MULTISIG --rpc-url $ARB_RPC   # 0x               -> vacio: NO existe en Arbitrum
+```
+
+Desplegar un contrato escribe su codigo en el estado **de una red**. Nada se copia a las demas.
+
+#### 8.2 Con MetaMask: lo mismo, visto como usuario
+
+1. Instala MetaMask y crea una cuenta **nueva y dedicada a pruebas** (nunca uses tu wallet personal para aprender).
+2. Activa las redes de prueba: menu de redes → *Show test networks* → selecciona **Sepolia**.
+3. Agrega **Arbitrum Sepolia** (desde [chainlist.org](https://chainlist.org/chain/421614) o a mano, en *Add network manually*):
+
+   | Campo | Valor |
+   |-------|-------|
+   | Network name | Arbitrum Sepolia |
+   | RPC URL | `https://sepolia-rollup.arbitrum.io/rpc` |
+   | Chain ID | `421614` |
+   | Currency symbol | `ETH` |
+   | Block explorer | `https://sepolia.arbiscan.io` |
+
+4. (Opcional) Agrega **Anvil**: RPC `http://127.0.0.1:8545`, chain ID `31337`, simbolo `ETH`.
+
+Ahora observa, cambiando de red en el selector:
+
+| Que observar | Que deberias ver | Que significa |
+|--------------|------------------|---------------|
+| La direccion `0x...` arriba | **No cambia** al cambiar de red | La direccion viene de tu clave, no de la red |
+| El balance | Cambia segun la red (probablemente 0 en todas) | Cada red tiene su propio estado |
+| El simbolo del gas | "SepoliaETH" en Sepolia, "ETH" en Arbitrum Sepolia | Es el native gas token **de esa red** |
+| Tu direccion en [sepolia.etherscan.io](https://sepolia.etherscan.io) y en [sepolia.arbiscan.io](https://sepolia.arbiscan.io) | Dos exploradores distintos, dos historiales distintos | Cada red tiene su propio explorador porque tiene su propia cadena de bloques |
+
+> **Experimento del simbolo**: al agregar una red a mano, prueba a poner `PATATA` como currency symbol. MetaMask te advertira, pero la red funciona igual. El simbolo es una etiqueta de *tu wallet*; lo que define la red es el **chain ID** y el **RPC**.
+
+#### 8.3 Explicalo con tus palabras
+
+Antes de seguir, responde sin mirar:
+
+1. Si mandas 1 SepoliaETH a tu direccion, cuanto ETH ves en Arbitrum Sepolia? Por que?
+2. Un amigo te dice: "mandame USDC a mi direccion, es la misma en todas las redes". Que le tienes que preguntar antes de enviar nada?
+3. Por que `cast code $MULTISIG` devuelve bytecode en una red y `0x` en otra?
+
+<details>
+<summary>Respuestas</summary>
+
+1. **Cero.** Sepolia y Arbitrum Sepolia son redes distintas, con estados distintos. Para tener ETH en Arbitrum Sepolia hay que hacer un bridge (lo haras en el modulo 05).
+2. **En que red.** La direccion sirve en todas, pero el USDC de cada red es un contrato distinto. Si lo envias en una red que tu amigo no usa, el saldo queda en esa red (y si la direccion es un contrato, por ejemplo una multisig, puede que ni siquiera exista alli).
+3. Porque el deploy escribio el codigo solo en el estado de Anvil. Cada red es un disco separado.
+
+</details>
+
 ### Troubleshooting
 
 | Error | Causa | Solucion |
@@ -796,6 +1010,9 @@ forge create ...               Desplegar contrato en Anvil
 cast send ...                  Enviar transaccion (modifica estado)
 cast call ...                  Leer estado (sin gas, sin transaccion)
 cast balance ...               Ver balance ETH de una cuenta
+cast chain-id ...              Ver con que red estas hablando
+cast nonce ...                 Ver cuantas txs envio una cuenta EN ESA RED
+cast code ...                  Ver si una direccion tiene contrato EN ESA RED
 ```
 
 ---
@@ -874,6 +1091,11 @@ unchecked {
 
 Antes de avanzar al Modulo 02, verifica que puedes:
 
+- [ ] Explicar con tus palabras la diferencia entre blockchain, EVM, Ethereum Mainnet, ETH y un token ERC-20
+- [ ] Explicar por que ETH no necesita un smart contract y por que el gas se paga en el activo nativo
+- [ ] Nombrar dos redes EVM-compatibles que **no** usan ETH como gas
+- [ ] Mostrar con `cast` que la misma direccion tiene balance y nonce distintos en Anvil, Ethereum y Arbitrum
+- [ ] Explicar por que tu MultiSig existe en Anvil pero no en Ethereum Mainnet
 - [ ] Explicar la diferencia entre `storage`, `memory` y `calldata`
 - [ ] Describir como funciona el storage layout (slots de 32 bytes, packing)
 - [ ] Escribir un contrato con `modifier`, `event` y custom errors

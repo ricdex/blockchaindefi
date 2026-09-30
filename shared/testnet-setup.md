@@ -12,6 +12,7 @@ Como obtener ETH de prueba, configurar RPC y desplegar contratos en redes de tes
 |-----------|-------------|-------|
 | Tests unitarios y de integracion | Anvil (local) | Gratis, sin setup |
 | Verificar comportamiento en red real | Testnet (Sepolia) | Gratis (faucet) |
+| Probar una L2 y el bridge L1 → L2 | Arbitrum Sepolia | Gratis (bridge desde Sepolia) |
 | Red privada / enterprise | Besu IBFT 2.0 | Gratis (Docker local) |
 | Produccion | Mainnet | ETH real |
 
@@ -37,20 +38,37 @@ Block time: ~12 segundos
 Explorer:   https://sepolia.etherscan.io
 ```
 
-### Holesky
+### Hoodi
 
-Testnet para testing de infraestructura y staking. Mas grande que Sepolia, util para pruebas de escala.
+Testnet para testing de infraestructura y staking. Reemplazo a Holesky, que quedo deprecada en 2025.
 
 ```
-Nombre:     Holesky
-Chain ID:   17000
-Moneda:     HoleskyETH (sin valor real)
+Nombre:     Hoodi
+Chain ID:   560048
+Moneda:     HoodiETH (sin valor real)
 Consenso:   Proof of Stake
 Block time: ~12 segundos
-Explorer:   https://holesky.etherscan.io
+Explorer:   https://hoodi.etherscan.io
 ```
 
-**Recomendacion**: usa **Sepolia** para ejercicios de este repositorio. Es la testnet mas soportada por faucets y herramientas.
+### Arbitrum Sepolia (L2 de prueba)
+
+Testnet de **Arbitrum**. Es una L2 que se asienta en **Sepolia**, igual que Arbitrum One se asienta en Ethereum Mainnet. Se usa en el [laboratorio L1 → L2 del modulo developer/05](../developer/05-oracles-and-bridges/).
+
+```
+Nombre:     Arbitrum Sepolia
+Chain ID:   421614
+Moneda:     ETH (ETH nativo de Arbitrum Sepolia, sin valor real)
+Tipo:       Optimistic rollup, se asienta en Sepolia (chain ID 11155111)
+Block time: ~250 ms
+RPC:        https://sepolia-rollup.arbitrum.io/rpc
+Explorer:   https://sepolia.arbiscan.io
+Bridge:     https://bridge.arbitrum.io (activar modo testnet)
+```
+
+> **Importante**: el SepoliaETH y el ETH de Arbitrum Sepolia son **balances distintos en redes distintas**, aunque tu direccion sea la misma. Para tener ETH en Arbitrum Sepolia hay dos caminos: hacer un **bridge** desde Sepolia (recomendado, porque es parte del aprendizaje) o usar un faucet especifico de Arbitrum Sepolia.
+
+**Recomendacion**: usa **Sepolia** para ejercicios de L1 y **Arbitrum Sepolia** para los de L2.
 
 ---
 
@@ -89,8 +107,23 @@ cast wallet new
 ### 3. Verificar balance
 
 ```bash
-cast balance $TU_ADDRESS --rpc-url https://rpc.sepolia.org
+cast balance $TU_ADDRESS --rpc-url https://ethereum-sepolia-rpc.publicnode.com
 ```
+
+---
+
+## Configurar MetaMask
+
+MetaMask es una wallet: guarda tu clave y firma transacciones. **No "esta" en ninguna red**: habla con la red que elijas en el selector, a traves de un RPC.
+
+1. Crea una cuenta **dedicada a pruebas**.
+2. Sepolia ya viene incluida: menu de redes → *Show test networks*.
+3. Agrega Arbitrum Sepolia desde [chainlist.org/chain/421614](https://chainlist.org/chain/421614) o a mano (*Add network manually*) con los datos de la seccion anterior.
+4. (Opcional) Agrega Anvil: RPC `http://127.0.0.1:8545`, chain ID `31337`.
+
+Al cambiar de red, tu direccion **no cambia**, pero el balance si. Cada red tiene su propio estado (ver [developer/01, seccion 0](../developer/01-solidity-fundamentals/)).
+
+> Si MetaMask muestra un balance inesperado, lo primero que hay que revisar es **en que red estas**. Es el error mas comun.
 
 ---
 
@@ -101,8 +134,11 @@ Necesitas un endpoint RPC para comunicarte con la testnet. Opciones:
 ### RPC publico (sin registro)
 
 ```
-Sepolia:  https://rpc.sepolia.org
-Holesky:  https://rpc.holesky.ethpandaops.io
+Sepolia:          https://ethereum-sepolia-rpc.publicnode.com
+Hoodi:            https://ethereum-hoodi-rpc.publicnode.com
+Arbitrum Sepolia: https://sepolia-rollup.arbitrum.io/rpc
+Ethereum Mainnet: https://ethereum-rpc.publicnode.com   (solo lectura en este curso)
+Arbitrum One:     https://arb1.arbitrum.io/rpc           (solo lectura en este curso)
 ```
 
 Limitaciones: rate limiting, puede ser lento, no recomendado para deploys frecuentes.
@@ -137,6 +173,7 @@ ETHERSCAN_API_KEY=TU_ETHERSCAN_API_KEY
 ```toml
 [rpc_endpoints]
 sepolia = "${SEPOLIA_RPC_URL}"
+arbitrum_sepolia = "https://sepolia-rollup.arbitrum.io/rpc"
 local = "http://localhost:8545"
 besu = "http://localhost:8545"
 
@@ -220,6 +257,7 @@ cast send $TU_ADDRESS --value 0 \
 ### Error "insufficient funds"
 
 - Verifica que tienes SepoliaETH (no mainnet ETH)
+- Verifica que el saldo esta **en la red donde estas enviando**: el ETH de Sepolia no paga gas en Arbitrum Sepolia, y viceversa (`cast chain-id --rpc-url $RPC` te dice con que red hablas)
 - Verifica que el RPC apunta a Sepolia (chain ID 11155111)
 - Solicita mas ETH de un faucet
 
@@ -233,7 +271,7 @@ cast nonce $TU_ADDRESS --rpc-url $SEPOLIA_RPC_URL
 ### RPC no responde
 
 - Verifica tu API key si usas Alchemy/Infura
-- Prueba el RPC publico como fallback: `https://rpc.sepolia.org`
+- Prueba el RPC publico como fallback: `https://ethereum-sepolia-rpc.publicnode.com`
 - Revisa si el proveedor tiene un status page
 
 ---
@@ -243,4 +281,7 @@ cast nonce $TU_ADDRESS --rpc-url $SEPOLIA_RPC_URL
 - [Ethereum Testnets Overview](https://ethereum.org/en/developers/docs/networks/#ethereum-testnets)
 - [Foundry Book - Deploying](https://book.getfoundry.sh/forge/deploying)
 - [Sepolia Etherscan](https://sepolia.etherscan.io)
-- [Holesky Etherscan](https://holesky.etherscan.io)
+- [Hoodi Etherscan](https://hoodi.etherscan.io)
+- [Arbitrum Sepolia Arbiscan](https://sepolia.arbiscan.io)
+- [Arbitrum Docs - Chain info (RPCs y chain IDs)](https://docs.arbitrum.io/for-devs/dev-tools-and-resources/chain-info)
+- [Chainlist](https://chainlist.org) - agregar redes a MetaMask por chain ID

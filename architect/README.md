@@ -46,14 +46,14 @@ Los modulos 01-03 establecen los fundamentos. Los modulos 04-08 pueden estudiars
 | 02 | [Protocol Design](02-protocol-design/) | Diseno de protocolos DeFi, invariantes, composability | ~10 horas | Intermedio |
 | 03 | [Tokenomics Models](03-tokenomics-models/) | Modelos economicos, incentivos, emision, mecanismos de peg | ~10 horas | Intermedio-Alto |
 | 04 | [Security Architecture](04-security-architecture/) | Threat modeling, superficie de ataque, formal verification | ~10 horas | Alto |
-| 05 | [Scalability](05-scalability/) | L2 rollups, data availability, sharding, throughput | ~10 horas | Alto |
+| 05 | [Scalability](05-scalability/) | L2 vs cadena independiente, Arbitrum capa por capa, rollups, data availability | ~11 horas | Alto |
 | 06 | [Cross-chain Architecture](06-cross-chain-architecture/) | Bridges, messaging protocols, interoperabilidad | ~8 horas | Alto |
 | 07 | [Identity and Compliance](07-identity-and-compliance/) | Identidad descentralizada, compliance regulatorio, privacy | ~8 horas | Intermedio-Alto |
 | 08 | [MEV and Ordering](08-mev-and-ordering/) | MEV extraction, PBS, order flow, subastas de bloques | ~8 horas | Alto |
 | 09 | [System Design Cases](09-system-design-cases/) | Casos reales: Uniswap, Aave, MakerDAO, analisis end-to-end | ~12 horas | Alto |
 | 10 | [Enterprise Blockchain](10-enterprise-blockchain/) | Besu, FireFly, consorcio, arquitectura hibrida publica/privada | ~8 horas | Intermedio-Alto |
 
-**Total estimado: ~92 horas**
+**Total estimado: ~93 horas**
 
 ---
 

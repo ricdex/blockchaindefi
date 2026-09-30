@@ -4,6 +4,7 @@
 
 Al completar este modulo seras capaz de:
 
+- Distinguir un activo nativo, un token ERC-20, un wrapped token y un bridged token
 - Entender el estandar ERC-20 a nivel de interfaz y de implementacion
 - Comprender ERC-721 (NFTs) y ERC-1155 (multi-token) a nivel conceptual
 - Implementar un ERC-20 completo desde cero (sin OpenZeppelin)
@@ -22,6 +23,95 @@ Al completar este modulo seras capaz de:
 ---
 
 ## Conceptos clave
+
+### 0. Antes de ERC-20: ETH no es un token
+
+En el modulo 01 viste que el ETH vive en el campo `balance` de cada cuenta y que un token vive en el storage de un contrato. De esa diferencia salen **cuatro tipos de activo** que vas a encontrar en cualquier wallet. Conviene saber distinguirlos a simple vista.
+
+| Tipo | Quien lleva la cuenta | Ejemplo | Riesgo principal |
+|------|-----------------------|---------|------------------|
+| **Activo nativo** | El protocolo de la red (campo `balance`) | ETH en Ethereum, ETH en Arbitrum, BNB en BNB Chain | El de la red misma |
+| **Token ERC-20** | Un contrato, en su `mapping` de balances | USDC, UNI, tu VestingToken | El emisor y el codigo del contrato |
+| **Wrapped token** | Un contrato que custodia el activo nativo **en la misma red** y emite un ERC-20 1:1 | WETH en Ethereum | Casi ninguno: el contrato es trivial y siempre puedes desenvolver |
+| **Bridged token** | Un contrato en la red B que representa un activo bloqueado en la red A | USDC.e en Arbitrum (respaldado por USDC bloqueado en Ethereum) | El bridge: si lo hackean, la representacion queda sin respaldo |
+
+#### Por que existe WETH (wrapped ≠ bridged)
+
+ETH no es un ERC-20: no tiene `approve` ni `transferFrom`. Un DEX que solo sabe mover ERC-20 no puede tocarlo. WETH resuelve eso **sin salir de la red**:
+
+```
+                 Ethereum Mainnet (una sola red, un solo estado)
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │                                                                     │
+  │  Alice ──deposit() + 1 ETH──────> Contrato WETH                    │
+  │                                     - su balance nativo: +1 ETH    │
+  │                                     - _balances[Alice]: +1 WETH    │
+  │                                                                     │
+  │  Alice <──1 ETH── withdraw(1) ─── Contrato WETH                    │
+  │                                     - quema 1 WETH, devuelve 1 ETH │
+  └─────────────────────────────────────────────────────────────────────┘
+```
+
+Todo ocurre en la misma red y en el mismo estado, asi que no hay que confiar en nadie: el ETH esta dentro del contrato y cualquiera puede verificarlo. Un **bridged** token, en cambio, siempre implica **dos redes** y un mecanismo (el bridge) que asegura que lo bloqueado en una coincide con lo emitido en la otra. Lo veras a fondo en el modulo 05.
+
+#### La palabra "nativo" tiene dos significados
+
+El ecosistema usa "nativo" para dos cosas distintas, y conviene separarlas:
+
+1. **Activo nativo de la red**: el que lleva el protocolo y paga el gas (ETH en Arbitrum). No tiene contrato.
+2. **Token de emision nativa**: un ERC-20 que el emisor acuna **directamente** en esa red, sin bridge. Por ejemplo, el "USDC nativo" de Arbitrum lo emite Circle en Arbitrum. Sigue siendo un ERC-20 (tiene contrato), pero no depende de un bridge.
+
+#### Un token se identifica por (red, direccion), no por su simbolo
+
+En Arbitrum One hay dos contratos distintos que dicen llamarse "USDC". Compruebalo tu mismo:
+
+```bash
+export ARB_RPC=https://arb1.arbitrum.io/rpc
+export ETH_RPC=https://ethereum-rpc.publicnode.com
+
+# USDC.e: version bridged (USDC bloqueado en Ethereum, representado en Arbitrum)
+cast call 0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8 "symbol()(string)" --rpc-url $ARB_RPC  # "USDC"
+cast call 0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8 "name()(string)"   --rpc-url $ARB_RPC  # "USD Coin (Arb1)"
+
+# USDC nativo: emitido por Circle directamente en Arbitrum
+cast call 0xaf88d065e77c8cC2239327C5EDb3A432268e5831 "symbol()(string)" --rpc-url $ARB_RPC  # "USDC"
+cast call 0xaf88d065e77c8cC2239327C5EDb3A432268e5831 "name()(string)"   --rpc-url $ARB_RPC  # "USD Coin"
+
+# El contrato del USDC nativo de Arbitrum... existe en Ethereum?
+cast codesize 0xaf88d065e77c8cC2239327C5EDb3A432268e5831 --rpc-url $ETH_RPC                # 0 -> no existe
+```
+
+Mismo simbolo, dos contratos, dos emisores y dos modelos de riesgo. Y el contrato de Arbitrum no existe en Ethereum. Por eso las wallets y los protocolos identifican un token por el par **(chain ID, direccion del contrato)**, nunca por el simbolo, que cualquiera puede copiar.
+
+#### Ejercicio rapido: envolver ETH en un fork de mainnet
+
+Con Anvil puedes copiar el estado real de Ethereum y jugar con el WETH de verdad, sin gastar nada:
+
+```bash
+# Terminal 1: fork de Ethereum Mainnet (queda corriendo)
+anvil --fork-url $ETH_RPC --port 8546
+
+# Terminal 2
+export FORK=http://127.0.0.1:8546
+export WETH=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2   # WETH en Ethereum Mainnet
+
+# Wallet nueva (las cuentas por defecto de Anvil tienen codigo en mainnet, ver modulo 01 Paso 8)
+cast wallet new                      # copia Address y Private key
+export ME=0x...                      # Address
+export KEY=0x...                     # Private key
+cast rpc anvil_setBalance $ME $(cast to-wei 10) --rpc-url $FORK   # le damos 10 ETH en el fork
+
+# 1. Envolver: el ETH pasa al contrato y recibes WETH
+cast send $WETH "deposit()" --value 1ether --private-key $KEY --rpc-url $FORK
+cast balance $ME --ether --rpc-url $FORK                             # ~9 ETH  (activo nativo)
+cast call $WETH "balanceOf(address)(uint256)" $ME --rpc-url $FORK    # 1e18    (ERC-20 en el storage de WETH)
+
+# 2. Desenvolver 0.4: se quema WETH y vuelve ETH nativo
+cast send $WETH "withdraw(uint256)" $(cast to-wei 0.4) --private-key $KEY --rpc-url $FORK
+cast call $WETH "balanceOf(address)(uint256)" $ME --rpc-url $FORK    # 6e17
+```
+
+Observa que usaste **dos comandos distintos** para ver cada saldo: `cast balance` le pregunta al protocolo y `balanceOf` le pregunta a un contrato. Esa es la diferencia entre un activo nativo y un token.
 
 ### 1. ERC-20: Token Fungible
 
@@ -259,6 +349,10 @@ Tokens como stETH cambian los balances automaticamente (rebase). Si tu contrato 
 
 Antes de avanzar al Modulo 03, verifica que puedes:
 
+- [ ] Explicar la diferencia entre activo nativo, ERC-20, wrapped token y bridged token, con un ejemplo de cada uno
+- [ ] Explicar por que WETH no implica confiar en un bridge y USDC.e si
+- [ ] Explicar por que un token se identifica por (chain ID, direccion) y no por su simbolo
+- [ ] Envolver y desenvolver ETH en un fork de mainnet usando `cast`
 - [ ] Escribir la interfaz ERC-20 de memoria (6 funciones + 2 events)
 - [ ] Explicar el flujo `approve` + `transferFrom` y para que sirve
 - [ ] Describir la vulnerabilidad de allowance front-running
